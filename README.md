@@ -5,5 +5,5 @@ This bash script adds rules to iptables (and ufw) that protects you from Attacks
 
 ## Installation:
 ```
-git clone https://github.com/yuk1c/antiddos && cd antiddos && chmod +x antiddos && sudo ./antiddos
+git clone https://github.com/yuk1c/antiddos && cd antiddos && chmod +x antiddos-yuki && sudo ./antiddos-yuki
 ```

@@ -3,6 +3,33 @@
 # against DDoS using iptables and UFW
 
 echo "adding rules to iptables & UFW..."
-iptables -A INPUT -p UDP -f -j DROP; iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP; iptables -A INPUT -p UDP --dport 19 -j DROP; iptables -A INPUT -p UDP --dport 7 -j DROP; iptables -A INPUT -p TCP --dport 135:139 -j DROP; iptables -A INPUT -p UDP --dport 135:139 -j DROP; iptables -A INPUT -p UDP -m limit --limit 5/s -j ACCEPT; iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP; iptables -A INPUT -p udp -m udp -m string --algo bm --from 28 --to 29 --string "0123456789ABCDE" -j DROP && iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP; iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP; iptables -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP; iptables -A INPUT -p udp -m u32 --u32 "22&0xFFFF=0x0008" -j DROP; iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 1/s --limit-burst 1000 -j ACCEPT; iptables -t raw -A PREROUTING -p udp -m limit --limit 1/s --limit-burst 1000 -j ACCEPT; iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 3/s --limit-burst 100 -j ACCEPT; ufw limit 80; ufw limit 443; iptables -N port-scanning; iptables -A port-scanning -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s --limit-burst 2 -j RETURN; iptables -A port-scanning -j DROP; iptables -A INPUT -p tcp -m connlimit --connlimit-above 80 -j REJECT --reject-with tcp-reset; iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP; iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT; iptables -A INPUT -p tcp -m conntrack --ctstate NEW -j DROP; iptables -A INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 50/s --limit-burst 20 -j ACCEPT; iptables -t raw -A PREROUTING -f -j DROP; iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set; iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 20 --hitcount 10 -j DROP
+iptables -A INPUT -p UDP -f -j DROP;
+iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP;
+iptables -A INPUT -p UDP --dport 19 -j DROP;
+iptables -A INPUT -p UDP --dport 7 -j DROP;
+iptables -A INPUT -p TCP --dport 135:139 -j DROP;
+iptables -A INPUT -p UDP --dport 135:139 -j DROP;
+iptables -A INPUT -p UDP -m limit --limit 5/s -j ACCEPT;
+iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
+iptables -A INPUT -p udp -m udp -m string --algo bm --from 28 --to 29 --string "0123456789ABCDE" -j DROP;
+iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP;
+iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
+iptables -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP;
+iptables -A INPUT -p udp -m u32 --u32 "22&0xFFFF=0x0008" -j DROP;
+iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 1/s --limit-burst 1000 -j ACCEPT;
+iptables -t raw -A PREROUTING -p udp -m limit --limit 1/s --limit-burst 1000 -j ACCEPT;
+iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 3/s --limit-burst 100 -j ACCEPT;
+ufw limit 80;
+ufw limit 443;
+iptables -N port-scan;
+iptables -A port-scan -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s --limit-burst 2 -j RETURN;
+iptables -A port-scan -j DROP; iptables -A INPUT -p tcp -m connlimit --connlimit-above 80 -j REJECT --reject-with tcp-reset;
+iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
+iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
+iptables -A INPUT -p tcp -m conntrack --ctstate NEW -j DROP;
+iptables -A INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 50/s --limit-burst 20 -j ACCEPT;
+iptables -t raw -A PREROUTING -f -j DROP;
+iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
+iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 20 --hitcount 10 -j DROP
 sleep 0.5;
 echo "rules have been added."

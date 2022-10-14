@@ -28,7 +28,7 @@ iptables -A port-scan -j DROP; iptables -A INPUT -p tcp -m connlimit --connlimit
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
 iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
-iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 20 --hitcount 20 -j DROP
+iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP
 iptables -t raw -A PREROUTING -f -j DROP;
 sleep 0.5;
 echo "> Rules have been added!"

@@ -1,8 +1,9 @@
 #!/bin/bash
 # this script will protect ur server
 # against DDoS using iptables and UFW
+LightBlue='\033[1;34m'
 
-echo "adding rules to iptables & UFW..."
+echo -e "${LightBlue}> Adding rules to iptables and UFW..."
 iptables -A INPUT -p UDP -f -j DROP;
 iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP;
 iptables -A INPUT -p UDP --dport 19 -j DROP;
@@ -32,4 +33,4 @@ iptables -t raw -A PREROUTING -f -j DROP;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 20 --hitcount 10 -j DROP
 sleep 0.5;
-echo "rules have been added."
+echo "> Rules have been added!"

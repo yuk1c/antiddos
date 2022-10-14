@@ -30,7 +30,5 @@ iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 
 iptables -A INPUT -p tcp -m conntrack --ctstate NEW -j DROP;
 iptables -A INPUT -p tcp -m conntrack --ctstate NEW -m limit --limit 50/s --limit-burst 20 -j ACCEPT;
 iptables -t raw -A PREROUTING -f -j DROP;
-iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
-iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 20 --hitcount 10 -j DROP
 sleep 0.5;
 echo "> Rules have been added!"

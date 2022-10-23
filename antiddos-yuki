@@ -4,6 +4,7 @@
 LightBlue='\033[1;34m'
 
 echo -e "${LightBlue}> Adding rules to iptables and UFW..."
+sleep 0.6;
 # Block fragmented TCP and UDP
 iptables -A INPUT -p UDP -f -j DROP;
 iptables -A INPUT -p TCP -f -j DROP;
@@ -50,8 +51,9 @@ iptables -I INPUT -p udp -m state --state INVALID -j DROP;
 iptables -A OUTPUT -p udp -m state --state INVALID -j DROP;
 iptables -A OUTPUT -p tcp -m state --state INVALID -j DROP;
 # Save all rules
-iptables-save
-sleep 0.5;
+iptables-save;
+clear;
+sleep 0.3;
 echo "> Rules have been added!"
 echo "> Want to delete rule? Replace -A (or -I) to -D and apply!"
 echo "> If u want to reset all rules, type iptables -F"

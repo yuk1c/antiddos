@@ -4,7 +4,7 @@
 LightBlue='\033[1;34m'
 
 echo -e "${LightBlue}> Adding rules to iptables and UFW..."
-sleep 0.6;
+sleep 0.5;
 # Block fragmented TCP and UDP
 iptables -A INPUT -p UDP -f -j DROP;
 iptables -A INPUT -p TCP -f -j DROP;

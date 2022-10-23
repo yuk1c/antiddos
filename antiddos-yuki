@@ -4,19 +4,23 @@
 LightBlue='\033[1;34m'
 
 echo -e "${LightBlue}> Adding rules to iptables and UFW..."
-sleep 0.5;
+sleep 1;
 # Block fragmented TCP and UDP
 iptables -A INPUT -p UDP -f -j DROP;
 iptables -A INPUT -p TCP -f -j DROP;
+
 # Block broadcast
 iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP;
+
 # Block 19,7,135,19 ports
 iptables -A INPUT -p UDP --dport 19 -j DROP;
 iptables -A INPUT -p UDP --dport 7 -j DROP;
 iptables -A INPUT -p TCP --dport 135:139 -j DROP;
 iptables -A INPUT -p UDP --dport 135:139 -j DROP;
+
 # Limit incoming UDP packets
 iptables -A INPUT -p UDP -m limit --limit 10/s -j ACCEPT;
+
 # Block certain packets
 iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
 iptables -A INPUT -p udp -m udp -m string --algo bm --from 28 --to 29 --string "0123456789ABCDE" -j DROP;
@@ -24,36 +28,46 @@ iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --al
 iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
 iptables -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP;
 iptables -A INPUT -p udp -m u32 --u32 "22&0xFFFF=0x0008" -j DROP;
+
 # Block NTP, DNS (not only) spoofed attacks
 iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 1/s --limit-burst 1000 -j ACCEPT;
 iptables -t raw -A PREROUTING -p udp -m limit --limit 1/s --limit-burst 1000 -j ACCEPT;
 iptables -A INPUT -p UDP --dport 5432 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 3/s --limit-burst 100 -j ACCEPT;
 iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 100 -j ACCEPT;
+
 # Limit PPS using UFW
 ufw limit 80;
 ufw limit 443;
+
 # Protection against portscanning, not tested
 iptables -N port-scan;
 iptables -A port-scan -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s --limit-burst 2 -j RETURN;
 iptables -A port-scan -j DROP; iptables -A INPUT -p tcp -m connlimit --connlimit-above 80 -j REJECT --reject-with tcp-reset;
+
 # Allow only rate-limited TCP RST Packets
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
 iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
+
 # Limit new connections per 10s
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP
+
 # Drop all fragmented packets on PREROUTING
 iptables -t raw -A PREROUTING -f -j DROP;
+
 # Block invalid TCP and UDP packets
 iptables -I INPUT -p tcp -m state --state INVALID -j DROP;
 iptables -I INPUT -p udp -m state --state INVALID -j DROP;
 iptables -A OUTPUT -p udp -m state --state INVALID -j DROP;
 iptables -A OUTPUT -p tcp -m state --state INVALID -j DROP;
+
 # Save all rules
 iptables-save;
 clear;
 sleep 0.3;
-echo "> Rules have been added!"
+
+echo "> Rules successfully applied and saved"
 echo "> Want to delete rule? Replace -A (or -I) to -D and apply!"
 echo "> If u want to reset all rules, type iptables -F"
+echo "> Don't forget about iptables-save"

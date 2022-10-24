@@ -28,6 +28,10 @@ iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --al
 iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
 iptables -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP;
 iptables -A INPUT -p udp -m u32 --u32 "22&0xFFFF=0x0008" -j DROP;
+iptables -I INPUT -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP;
+iptables -A INPUT -m u32 --u32 "12&0xFFFF=0" -j DROP;
+iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
+iptables -A INPUT -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP;
 
 # Block NTP, DNS (not only) spoofed attacks
 iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 1/s --limit-burst 1000 -j ACCEPT;
@@ -62,8 +66,19 @@ iptables -I INPUT -p udp -m state --state INVALID -j DROP;
 iptables -A OUTPUT -p udp -m state --state INVALID -j DROP;
 iptables -A OUTPUT -p tcp -m state --state INVALID -j DROP;
 
+# UDP spoofing load reduction
+ipset create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 timeout 120;
+iptables -N antiddosyuki -t raw;
+iptables -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j antiddosyuki;
+iptables -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src;
+iptables -A antiddosyuki -t raw -j DROP;
+
+# TCP Syncookies protection
+echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf;
+
 # Save all rules
 iptables-save;
+sysctl -p;
 clear;
 sleep 0.3;
 

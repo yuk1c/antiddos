@@ -4,5 +4,5 @@ This bash script adds rules to iptables, that protects you from Attacks on L4 OS
 
 ## Installation:
 ```
-git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
+sudo apt install ipset iptables ufw git-y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```

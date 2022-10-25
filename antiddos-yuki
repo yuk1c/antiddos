@@ -5,9 +5,20 @@ LightBlue='\033[1;34m'
 
 echo -e "${LightBlue}> Adding rules to iptables and UFW..."
 sleep 1;
+
+
 # Block fragmented TCP and UDP
 iptables -A INPUT -p UDP -f -j DROP;
 iptables -A INPUT -p TCP -f -j DROP;
+
+# Allow only rate-limited ICMP and block useless types
+iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
+iptables -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
+iptables -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
+iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/second -j ACCEPT;
+
+# Block SYN-Flood Attacks
+iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 4/s --limit-burst 3 -j DROP
 
 # Block unusual TCP flags
 iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
@@ -24,19 +35,36 @@ iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP;
 iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP;
 iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
 
+# Block all TCP packets in new conn, that not SYN
+iptables -t raw -A PREROUTING -p tcp ! --syn -m state --state NEW -j DROP;
+
+# Block IPs of known botnet
+iptables -t raw -A PREROUTING -s 39.17.1.0/24 -j DROP;
+iptables -t raw -A PREROUTING -s 14.139.112.0/24 -j DROP;
+iptables -t raw -A PREROUTING -s 103.107.113.0/24 -j DROP;
+iptables -t raw -A PREROUTING -s 27.185.23.0/24 -j DROP;
+iptables -t raw -A PREROUTING -s 211.242.56.0/24 -j DROP;
+iptables -t raw -A PREROUTING -s 103.7.148.0/24 -j DROP;
+iptables -t raw -A PREROUTING -s 124.123.26.0/24 -j DROP;
+
 # Block broadcast
 iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP;
 
-# Block 19,7,135,19 ports
-iptables -A INPUT -p UDP --dport 19 -j DROP;
-iptables -A INPUT -p UDP --dport 7 -j DROP;
-iptables -A INPUT -p TCP --dport 135:139 -j DROP;
-iptables -A INPUT -p UDP --dport 135:139 -j DROP;
+# Block useless ports for additional protection
+iptables -t raw -A PREROUTING -p UDP --dport 19 -j DROP;
+iptables -t raw -A PREROUTING -p UDP --dport 7 -j DROP;
+iptables -t raw -A PREROUTING -p TCP --dport 135:139 -j DROP;
+iptables -t raw -A PREROUTING -p UDP --dport 135:139 -j DROP;
+iptables -t raw -A PREROUTING -p tcp --dport 445 -j DROP;
+iptables -t raw -A PREROUTING -p tcp --dport 1900 -j DROP;
+iptables -t raw -A PREROUTING -p tcp --dport 3389 -j DROP;
+iptables -t raw -A PREROUTING -p tcp --dport 23 -j DROP;
+iptables -t raw -A PREROUTING -p tcp --dport 25 -j DROP;
 
 # Limit incoming UDP packets
-iptables -A INPUT -p UDP -m limit --limit 10/s -j ACCEPT;
+iptables -A INPUT -p UDP -m limit --limit 100/s -j ACCEPT;
 
-# Block certain packets
+# Block certain suspicious packets
 iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
 iptables -A INPUT -p udp -m udp -m string --algo bm --from 28 --to 29 --string "0123456789ABCDE" -j DROP;
 iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP;
@@ -68,7 +96,7 @@ iptables -A port-scan -j DROP; iptables -A INPUT -p tcp -m connlimit --connlimit
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
 iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 
-# Limit new connections per 10s
+# Limit new connections on port 80
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP
 

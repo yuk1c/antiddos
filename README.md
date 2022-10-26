@@ -17,6 +17,8 @@ Spoofed attacks
 
 Attacks that using invalid packets
 
+ICMP attacks
+
 UDP attacks, that not overwhelm ur network capacity.
 
 

@@ -123,6 +123,33 @@ ip6tables -t raw -A PREROUTING -m state --state INVALID -j DROP;
 # TCP Syncookies protection
 echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf;
 
+# Reverse-path filter
+echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf;
+
+# Disable IP Forward
+echo "net.ipv4.ip_forward = 0" >> /etc/sysctl.conf;
+
+# Decrease timeout for last_ack
+echo "net.netfilter.nf_conntrack_tcp_timeout_last_ack = 20" >> /etc/sysctl.conf;
+
+# Decrease timeout for closing conns
+echo "net.netfilter.nf_conntrack_tcp_timeout_close = 5" >> /etc/sysctl.conf;
+
+# Decrease timeout for UDP
+echo "net.ipv4.netfilter.ip_conntrack_udp_timeout = 20" >> /etc/sysctl.conf;
+
+# Decrease timeout for close_wait
+echo "net.netfilter.nf_conntrack_tcp_timeout_close_wait = 1" >> /etc/sysctl.conf;
+
+# Increase max open files
+echo "fs.file-max = 2097152" >> /etc/sysctl.conf;
+
+# Increase max connections value
+echo "net.core.somaxconn = 30000" >> /etc/sysctl.conf;
+
+# Decrease swappiness
+echo "vm.swappiness = 30" >> /etc/sysctl.conf;
+
 # Save all rules
 iptables-save;
 sysctl -p;

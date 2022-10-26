@@ -9,18 +9,20 @@ sudo apt install ipset iptables ufw git -y && git clone https://github.com/yuk1c
 
 ## He give you protection against:
 
-SYN Flood;
+TCP Flood attacks
 
-Fraggle attack (UDP and TCP);
+Fraggle attacks
 
-Spoofed attacks (UDP and TCP);
+Spoofed attacks
 
-Attacks that using invalid packets;
-
-TCP RST Flood;
+Attacks that using invalid packets
 
 UDP attacks, that not overwhelm ur network capacity.
 
 
-#### Will be added protection for ICMP later.
+## Want to drop all ICMP?
+```
+chmod +x drop-icmp && sudo bash drop-icmp
+```
 
+I recommend you use this script only if u under ICMP attack, or u want to make ur server invisible for ICMP

@@ -6,7 +6,6 @@
 LightBlue='\033[1;34m'
 
 echo -e "${LightBlue}> Adding rules to iptables and UFW..."
-sleep 1;
 
 # Want to update the rules?
 # Remove previous, using iptables -F and save them
@@ -19,7 +18,7 @@ iptables -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
 iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT;
 
 # Block SYN-Flood Attacks
-iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 5/s --limit-burst 3 -j ACCEPT;
+iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 3 -j ACCEPT;
 
 # Block unusual TCP flags (good against some DDoS on TCP)
 iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
@@ -108,7 +107,11 @@ iptables -A INPUT -p tcp -m connlimit --connlimit-above 100 -j REJECT --reject-w
 iptables -t raw -A PREROUTING -f -j DROP;
 
 # Block invalid packets against attack, that using invalid packets
-iptables -t raw -A PREROUTING -m state --state INVALID -j DROP;
+iptables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
+# If this rule disables internet access = use rules below
+# iptables -I INPUT -p TCP -m state --state INVALID -j DROP
+# iptables -I INPUT -p UDP -m state --state INVALID -j DROP
+# iptables -I INPUT -p ICMP -m state --state INVALID -j DROP
 
 # UDP spoofing load reduction
 ipset create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 timeout 120;
@@ -119,10 +122,11 @@ iptables -A antiddosyuki -t raw -j DROP;
 
 # Just IPv6 overall Protection
 ip6tables -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
-ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 6/s --limit-burst 30 -j ACCEPT
-ip6tables -t raw -A PREROUTING -m state --state INVALID -j DROP;
+ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 30 -j ACCEPT
+ip6tables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
+# Use the same fix (that in IPv4) if last rule disables internet access
 
-# Open SSH Port
+# Open SSH Port (fix ssh connection issues)
 iptables -t raw -A PREROUTING -p tcp --dport 22 -m limit --limit 5/s --limit-burst 20 -j ACCEPT
 
 # TCP Syncookies - good against SYN Flood attack
@@ -147,10 +151,13 @@ echo "net.ipv4.netfilter.ip_conntrack_udp_timeout = 20" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_tcp_timeout_close_wait = 1" >> /etc/sysctl.conf;
 
 # Increase max open files for high-loaded servers
-echo "fs.file-max = 2097152" >> /etc/sysctl.conf;
+echo "fs.file-max = 2000000" >> /etc/sysctl.conf;
 
-# Increase max connections value for better network performance
-echo "net.core.somaxconn = 16384" >> /etc/sysctl.conf;
+# Increase max connections value to MAX for better network performance
+echo "net.core.somaxconn = 65535" >> /etc/sysctl.conf;
+
+# Enable TCP TW reuse for better performance
+echo "tcp_tw_reuse = 1" >> /etc/sysctl.conf;
 
 # Decrease swappiness for better performance
 echo "vm.swappiness = 30" >> /etc/sysctl.conf;
@@ -184,16 +191,27 @@ echo "net.ipv6.conf.all.accept_ra = 0" >> /etc/sysctl.conf;
 echo "net.ipv6.route.flush = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.icmp_ignore_bogus_error_responses = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.icmp_echo_ignore_broadcasts = 1" >> /etc/sysctl.conf;
-echo "net.ipv4.conf.all.secure_redirects = 0" >> /etc/sysctl.conf;
+echo "net.ipv4.conf.all.secure_redirects = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.conf.all.accept_redirect = 0" >> /etc/sysctl.conf;
+# (src_valid_mark) leave 1 for security or set 0 for compatibility
+echo "net.ipv4.src_valid_mark = 1" >> /etc/sysctl.conf;
+echo "net.ipv6.echo_ignore_multicast = 1" >> /etc/sysctl.conf;
+echo "net.ipv6.echo_ignore_anycast = 1" >> /etc/sysctl.conf;
+echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf;
+echo "net.ipv4.conf.interface.mc_forwarding = 0" >> /etc/sysctl.conf;
+# Will be added option net.ipv4.tcp_invalid_ratelimit later
+echo "net.netfilter.nf_conntrack_helper = 0" >> /etc/syctl.conf;
+echo "net.ipv4.ip_local_port_range=32768 65535" >> /etc/sysctl.conf
 
 # Save all rules
 iptables-save;
 sysctl -p;
 clear;
-sleep 0.3;
 
 echo "> Rules successfully applied and saved"
 echo "> Want to delete rule? Replace -A (or -I) to -D and apply!"
-echo "> If u want to reset all rules, type iptables -F"
-echo "> Don't forget about iptables-save"
+
+# I u want do delete ALL iptables rules, type iptables -F
+# And do not forget about iptable-save, after iptables -F
+
+# Made by yuki with love

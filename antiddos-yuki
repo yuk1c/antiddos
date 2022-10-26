@@ -6,19 +6,18 @@ LightBlue='\033[1;34m'
 echo -e "${LightBlue}> Adding rules to iptables and UFW..."
 sleep 1;
 
-
-# Block fragmented TCP and UDP
-iptables -A INPUT -p UDP -f -j DROP;
-iptables -A INPUT -p TCP -f -j DROP;
+# Want to update the rules?
+# Remove previous, using iptables -F and save them
+# And apply new rules
 
 # Allow only rate-limited ICMP and block useless types
 iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
-iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/second -j ACCEPT;
+iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT;
 
 # Block SYN-Flood Attacks
-iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 4/s --limit-burst 3 -j DROP
+iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 4/s --limit-burst 3 -j ACCEPT;
 
 # Block unusual TCP flags
 iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
@@ -62,7 +61,7 @@ iptables -t raw -A PREROUTING -p tcp --dport 23 -j DROP;
 iptables -t raw -A PREROUTING -p tcp --dport 25 -j DROP;
 
 # Limit incoming UDP packets
-iptables -A INPUT -p UDP -m limit --limit 100/s -j ACCEPT;
+iptables -A INPUT -p UDP -m limit --limit 150/s -j ACCEPT;
 
 # Block certain suspicious packets
 iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
@@ -77,11 +76,10 @@ iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo k
 iptables -A INPUT -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP;
 
 # Block NTP, DNS (not only) spoofed attacks
-iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 1/s --limit-burst 1000 -j ACCEPT;
-iptables -t raw -A PREROUTING -p udp -m limit --limit 1/s --limit-burst 1000 -j ACCEPT;
-iptables -A INPUT -p UDP --dport 5432 -j DROP;
-iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 3/s --limit-burst 100 -j ACCEPT;
-iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 100 -j ACCEPT;
+iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 10 -j ACCEPT;
+iptables -t raw -A PREROUTING -p UDP --dport 5432 -j DROP;
+iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 10 -j ACCEPT;
+iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 10 -j ACCEPT;
 
 # Limit PPS using UFW
 ufw limit 80;
@@ -90,7 +88,8 @@ ufw limit 443;
 # Protection against portscanning, not tested
 iptables -N port-scan;
 iptables -A port-scan -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s --limit-burst 2 -j RETURN;
-iptables -A port-scan -j DROP; iptables -A INPUT -p tcp -m connlimit --connlimit-above 80 -j REJECT --reject-with tcp-reset;
+iptables -A port-scan -j DROP;
+iptables -A INPUT -p tcp -m connlimit --connlimit-above 80 -j REJECT --reject-with tcp-reset;
 
 # Allow only rate-limited TCP RST Packets
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
@@ -100,14 +99,14 @@ iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP
 
+# Global conn-limit
+iptables -A INPUT -p tcp -m connlimit --connlimit-above 100 -j REJECT --reject-with tcp-reset;
+
 # Drop all fragmented packets on PREROUTING
 iptables -t raw -A PREROUTING -f -j DROP;
 
-# Block invalid TCP and UDP packets
-iptables -I INPUT -p tcp -m state --state INVALID -j DROP;
-iptables -I INPUT -p udp -m state --state INVALID -j DROP;
-iptables -A OUTPUT -p udp -m state --state INVALID -j DROP;
-iptables -A OUTPUT -p tcp -m state --state INVALID -j DROP;
+# Block invalid packets
+iptables -t raw -A PREROUTING -m state --state INVALID -j DROP;
 
 # UDP spoofing load reduction
 ipset create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 timeout 120;
@@ -115,6 +114,11 @@ iptables -N antiddosyuki -t raw;
 iptables -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j antiddosyuki;
 iptables -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src;
 iptables -A antiddosyuki -t raw -j DROP;
+
+# IPv6 Protection
+ip6tables -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
+ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 6/s --limit-burst 30 -j ALLOW
+ip6tables -t raw -A PREROUTING -m state --state INVALID -j DROP;
 
 # TCP Syncookies protection
 echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf;

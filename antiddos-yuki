@@ -1,7 +1,7 @@
 #!/bin/bash
 # This script will protect ur server
-# against DDoS using iptables and UFW
-# And it doesn't contain useless rules, so there is no performance impact
+# against some attacks like DDoS, MiTM, etc, using iptables, UFW, kernel tuning
+# And it can improve performance of ur server
 
 LightBlue='\033[1;34m'
 
@@ -10,6 +10,26 @@ echo -e "${LightBlue}> Adding rules to iptables and UFW..."
 # Want to update the rules?
 # Remove previous, using iptables -F and save them
 # And apply new rules
+
+# AutoInstall required packages
+
+if iptables | grep -q 'found';
+then
+  apt install iptables iptables-persistent -y
+fi
+
+
+if ipset | grep -q 'found';
+then
+  apt install ipset -y
+fi
+
+if ufw | grep -q 'found';
+then
+  apt install UFW -y
+fi
+
+# End
 
 # Allow only rate-limited ICMP and block useless types
 iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
@@ -205,11 +225,14 @@ echo "net.ipv4.ip_local_port_range=32768 65535" >> /etc/sysctl.conf
 
 # Save all rules
 iptables-save;
+ip6tables-save;
 sysctl -p;
 clear;
+# Remove clear cmd, if u want to see stdout
 
 echo "> Rules successfully applied and saved"
-echo "> Want to delete rule? Replace -A (or -I) to -D and apply!"
+
+# Want to delete rule? Replace -A (or -I) to -D and apply!
 
 # I u want do delete ALL iptables rules, type iptables -F
 # And do not forget about iptable-save, after iptables -F

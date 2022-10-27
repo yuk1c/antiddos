@@ -31,7 +31,7 @@ git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos
 
 ### ❓️ Want to drop all ICMP?
 ```
-chmod +x drop-icmp && sudo bash drop-icmp
+sudo bash drop-icmp
 ```
 
 I recommend you use drop-icmp script only if u under ICMP attack, or u want to make your server invisible for ICMP.

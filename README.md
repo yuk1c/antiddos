@@ -46,3 +46,6 @@ sudo iptables -F; cd ~/antiddos && git pull && sudo bash antiddos-yuki
 rm -fr ~/antiddos; sudo iptables -F
 ```
 Delete parameters from /etc/sysctl.conf manually (if u need)
+
+
+#### If /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron (because sysctl -w changes resets after reboot)

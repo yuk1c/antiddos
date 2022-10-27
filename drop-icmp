@@ -7,7 +7,22 @@
 iptables -t raw -D PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
 iptables -t raw -D PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
 iptables -t raw -D PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
-iptables -t raw -D PREROUTING -p icmp -m limit --limit 2/second -j ACCEPT
+iptables -t raw -D PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT;
 
 # Just drop all ICMP
-iptables -t raw -A PREROUTING -p icmp -j DROP
+iptables -t raw -A PREROUTING -p icmp -j DROP;
+
+# You can only ignore ICMP, using:
+# echo "net.ipv4.icmp_echo_ignore_all=1" >> /etc/sysctl.conf
+# But iptables rules better
+
+# IPv6 uses ICMPv6 for ARP and other necessary protocols, we cant fully disable it
+
+ip6tables -t raw -D PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
+ip6tables -t raw -A PREROUTING -p icmpv6 --icmp-type echo-request;
+
+
+
+iptables-save;
+ip6tables-save;
+echo "Done."

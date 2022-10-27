@@ -177,7 +177,7 @@ echo "fs.file-max = 2000000" >> /etc/sysctl.conf;
 echo "net.core.somaxconn = 65535" >> /etc/sysctl.conf;
 
 # Enable TCP TW reuse for better performance
-echo "tcp_tw_reuse = 1" >> /etc/sysctl.conf;
+echo "net.ipv4.tcp_tw_reuse = 1" >> /etc/sysctl.conf;
 
 # Decrease swappiness for better performance
 echo "vm.swappiness = 30" >> /etc/sysctl.conf;

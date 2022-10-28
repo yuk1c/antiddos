@@ -2,6 +2,7 @@
 # You cant apply tweaks to /etc/sysctl.conf?
 # Use this script!
 # And add to cron for execution after every reboot
+# Tweaks in main script updated more frequently
 
 # TCP Syncookies - good against SYN Flood attack
 sysctl -w net.ipv4.tcp_syncookies=1

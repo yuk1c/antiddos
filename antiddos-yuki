@@ -23,11 +23,6 @@ then
  apt install ipset -y
 fi
 
-if ufw | grep -q 'found';
-then
- apt install UFW -y
-fi
-
 # End
 
 # Allow only rate-limited ICMP and block useless types

@@ -3,7 +3,7 @@
 <a href="#"><img src="https://img.shields.io/github/last-commit/yuk1c/antiddos"/></a>
 <a href="#"><img src="https://img.shields.io/github/contributors/yuk1c/antiddos"/></a>
 [![DeepSource](https://deepsource.io/gh/yuk1c/antiddos.svg/?label=active+issues&show_trend=true&token=tVgsBqvfV3KBAOkyv3rCEYiV)](https://deepsource.io/gh/yuk1c/antiddos/?ref=repository-badge)
-### Fresh script for DDoS Mitigation using iptables, UFW, Kernel tweaks
+### Fresh script for DDoS Mitigation using iptables and Kernel tweaks
 This bash script adds rules to iptables, that protects you from Attacks on L4 OSI Model, like SYN Flood. Also, applies kernel tweaks. Working only on Debian-based.
 ##### If you are under volumetric DDoS - this rules doesn't help to you, bc this attacks overwhelm network capacity of ur server. Use VPS/VDS/DS with AntiDDoS.
 

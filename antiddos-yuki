@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script will protect ur server
-# against some attacks like DDoS, MiTM, etc, using iptables, UFW, kernel tuning
+# against some attacks like DDoS, MiTM, etc, using iptables, kernel tuning
 # And it can improve performance of ur server
 
 LightBlue='\033[1;34m'

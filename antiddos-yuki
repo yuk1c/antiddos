@@ -11,17 +11,8 @@ echo -e "${LightBlue}> Adding rules to iptables and UFW..."
 # Remove previous, using iptables -F and save them
 # And apply new rules
 
-# AutoInstall required packages
-
-if iptables | grep -q 'found';
-then
- apt install iptables iptables-persistent -y
-fi
-
-if ipset | grep -q 'found';
-then
- apt install ipset -y
-fi
+# Install required packages
+apt install iptables iptables-persistent ipset -y
 
 # End
 

@@ -3,18 +3,18 @@
 # against some attacks like DDoS, MiTM, etc, using iptables, kernel tuning
 # And it can improve performance of ur server
 
-LightBlue='\033[1;34m'
+# LightBlue='\033[1;34m'
 
-echo -e "${LightBlue}> Adding rules to iptables and UFW..."
+# echo -e "${LightBlue}> Adding rules to iptables and UFW..."
 
 # Want to update the rules?
-# Remove previous, using iptables -F and save them
+# Remove previous using iptables -F and save them
 # And apply new rules
 
 # Install required packages
-apt install iptables iptables-persistent ipset -y
+apt install iptables iptables-persistent ipset -y && pip install lolcat
 
-# End
+# ------------------------------------
 
 # Allow only rate-limited ICMP and block useless types
 iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
@@ -27,8 +27,8 @@ iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -m limit --limit 1/s -j ACCEPT;
 
 # Protection against UDP DDoS On randports, when you server flooding "icmp port unreach"
-iptables -A OUTPUT -p icmp -j DROP;
-iptables -A OUTPUT -p icmp -m limit --limit 10/s -j ACCEPT;
+iptables -A OUTPUT -p icmp --icmp-type port-unreach -j DROP;
+iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 3/s -j ACCEPT;
 
 # Block SYN-Flood Attacks
 iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 3 -j ACCEPT;
@@ -76,7 +76,7 @@ iptables -t raw -A PREROUTING -p tcp --dport 25 -j DROP;
 
 # Limit incoming UDP packets against UDP DDoS
 iptables -A INPUT -p UDP -j DROP;
-iptables -A INPUT -p UDP -m limit --limit 150/s -j ACCEPT;
+iptables -A INPUT -p UDP -m limit --limit 100/s -j ACCEPT;
 
 # Block certain suspicious packets
 iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
@@ -91,35 +91,34 @@ iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo k
 iptables -A INPUT -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP;
 
 # Block NTP, DNS (not only) spoofed attacks
+# ToDo: block other spoofs, use multiport
 iptables -t raw -A PREROUTING -p udp --sport 123 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 53 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 5432 -j DROP;
+iptables -t raw -A PREROUTING -p udp --sport 17185 -j DROP;
+iptables -t raw -A PREROUTING -p udp --sport 7001 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 iptables -t raw -A PREROUTING -p udp --dport 5432 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 10 -j ACCEPT;
 iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 7 -j ACCEPT;
 
-# Protection against portscanning, not tested
-iptables -N port-scan;
-iptables -A port-scan -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s --limit-burst 2 -j RETURN;
-iptables -A port-scan -j DROP;
-iptables -A INPUT -p tcp -m connlimit --connlimit-above 80 -j REJECT --reject-with tcp-reset;
+# Connections limit
+iptables -A INPUT -p tcp -m connlimit --connlimit-above 150 -j REJECT --reject-with tcp-reset;
+iptables -A INPUT -p tcp --syn -m iplimit --iplimit-above 9 -j DROP;
 
 # Allow only rate-limited TCP RST Packets against TCP RST Flood Attacks
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
 iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 
 # Limit new connections on port 80 for additional protection
+# ToDo: make the same limit but for ssh port
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP
 
-# Global conn-limit against some TCP attacks
-iptables -A INPUT -p tcp -m connlimit --connlimit-above 100 -j REJECT --reject-with tcp-reset;
-
-# Drop all fragmented packets on PREROUTING against most fraggle attacks
+# Drop all fragmented and big packets on PREROUTING against most fraggle attacks
 iptables -t raw -A PREROUTING -f -j DROP;
 
-# Block invalid packets against attack, that using invalid packets
+# Block invalid packets against attacks that using invalid packets
 iptables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
 # If this rule disables internet access = use rules below
 # iptables -I INPUT -p TCP -m state --state INVALID -j DROP
@@ -133,7 +132,13 @@ iptables -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j a
 iptables -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src;
 iptables -A antiddosyuki -t raw -j DROP;
 
+# Block some Layer3 Protocols
+iptables -A INPUT -p ah -j DROP;
+iptables -A INPUT -p esp -j DROP;
+iptables -A INPUT -p gre -j DROP;
+
 # Just IPv6 overall Protection
+ip6tables -t raw -A PREROUTING -p icmpv6 -j DROP;
 ip6tables -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
 ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 30 -j ACCEPT
 ip6tables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
@@ -141,6 +146,8 @@ ip6tables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
 
 # Open SSH Port (fix ssh connection issues)
 iptables -t raw -A PREROUTING -p tcp --dport 22 -m limit --limit 5/s --limit-burst 20 -j ACCEPT
+
+# ------------------------------------
 
 # TCP Syncookies - good against SYN Flood attack
 echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf;
@@ -235,7 +242,6 @@ echo "net.ipv4.icmp_ratelimit = 1000" >> /etc/sysctl.conf;
 # echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf;
 # echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;
 
-
 # Save all rules
 iptables-save;
 ip6tables-save;
@@ -243,7 +249,7 @@ sysctl -p;
 clear;
 # Remove clear cmd, if u want to see stdout
 
-echo "> Rules successfully applied and saved"
+echo "> Rules successfully applied and saved" | lolcat
 
 # Want to delete rule? Replace -A (or -I) to -D and apply!
 

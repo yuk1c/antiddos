@@ -48,4 +48,18 @@ rm -fr ~/antiddos; sudo iptables -F
 Delete parameters from /etc/sysctl.conf manually (if u need)
 
 
-#### If /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron (because sysctl -w changes resets after reboot)
+#### /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron (because sysctl -w changes resets after reboot)
+
+### If you want to support me:
+
+#### Bitcoin
+bc1qvuef0mzerxcv5t43puagtkw83ymjghuv6czkr5
+
+#### Ethereum
+0x33A109Ae4B7d77A105968Fb0aE6A9d69cd723Ed2
+
+#### TON
+EQARZzTYKAbo9GHS3jjTim-Hh2QLuTuCc3ilagv0YNTs-y5C
+
+
+#### Thanks you for support 💙

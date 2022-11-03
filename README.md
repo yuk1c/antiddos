@@ -9,7 +9,7 @@ This bash script adds rules to iptables, that protects you from Attacks on L4 OS
 
 ### ⚙️ Installation:
 ```
-git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
+apt update && apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
 ### ⚔️ He give you protection against:
@@ -28,6 +28,21 @@ git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos
 
 ##### I remind you, that this script doesnt protect against Volumetric DDoS Attacks
 
+### 🍁 Requirements:
+
+* iptables
+
+* iptables-persistent (to save rules after reboot)
+
+* netfilter-persistent (to save rules on new distro's)
+
+* ipset
+
+* lolcat (cool output)
+
+* python3 (for lolcat)
+
+* pip (to install lolcat) 
 
 ### ❓️ Want to drop all ICMP?
 ```
@@ -38,7 +53,7 @@ I recommend you use drop-icmp script only if u under ICMP attack, or u want to m
 
 ### 🔄 You can update this script, using:
 ```
-sudo iptables -F; cd ~/antiddos && git pull && sudo bash antiddos-yuki
+cd ~/antiddos && git pull && sudo bash antiddos-yuki
 ```
 
 ### ❌️ For deleting all rules and this script, write:

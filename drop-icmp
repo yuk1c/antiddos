@@ -1,13 +1,14 @@
 #!/bin/bash
-# This script will make ur server invisible to ping requests
-# But no one can be ping your server
-# Execute as sudo!
+# This script will drop ALL ICMP Packets
+# Its not recommended, but can help to mitigate ICMP Attacks
 
 # Delete previous ICMP rules
 iptables -t raw -D PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
 iptables -t raw -D PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
 iptables -t raw -D PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
 iptables -t raw -D PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT;
+iptables -t raw -D PREROUTING -p icmp --icmp-type 8 -j DROP;
+iptables -t raw -D PREROUTING -p icmp --icmp-type 8 -m limit --limit 1/s -j ACCEPT;
 
 # Just drop all ICMP
 iptables -t raw -A PREROUTING -p icmp -j DROP;
@@ -19,10 +20,10 @@ iptables -t raw -A PREROUTING -p icmp -j DROP;
 # IPv6 uses ICMPv6 for ARP and other necessary protocols, we cant fully disable it
 
 ip6tables -t raw -D PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
-ip6tables -t raw -A PREROUTING -p icmpv6 --icmp-type echo-request;
-
+ip6tables -t raw -A PREROUTING -p icmpv6 --icmp-type echo-request -j DROP;
 
 
 iptables-save;
 ip6tables-save;
-echo "Done."
+clear;
+echo "[+] Done. ICMP now are blocked on your system." | lolcat

@@ -93,8 +93,7 @@ iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-bur
 iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 7 -j ACCEPT;
 
 # Connections limit
-iptables -A INPUT -p tcp -m connlimit --connlimit-above 150 -j REJECT --reject-with tcp-reset;
-iptables -A INPUT -p tcp --syn -m iplimit --iplimit-above 9 -j DROP;
+iptables -A INPUT -p tcp -m connlimit --connlimit-above 150 -j DROP;
 
 # Allow only rate-limited TCP RST Packets against TCP RST Flood Attacks
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;

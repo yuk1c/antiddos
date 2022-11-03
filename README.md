@@ -29,9 +29,7 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 ##### I remind you, that this script doesnt protect against Volumetric DDoS Attacks
 
 ### 🍁 Requirements:
-
-* iptables
-
+                                                                                 * iptables                                                                       
 * iptables-persistent (to save rules after reboot)
 
 * netfilter-persistent (to save rules on new distro's)
@@ -42,14 +40,14 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * python3 (for lolcat)
 
-* pip (to install lolcat) 
+* pip3 (to install lolcat)
 
 ### ❓️ Want to drop all ICMP?
 ```
-sudo bash drop-icmp
+cd ~/antiddos; sudo bash drop-icmp
 ```
 
-I recommend you use drop-icmp script only if u under ICMP attack, or u want to make your server invisible for ICMP.
+I recommend you use drop-icmp script only if you under ICMP attack. Dont use it without reason.
 
 ### 🔄 You can update this script, using:
 ```

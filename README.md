@@ -29,7 +29,9 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 ##### I remind you, that this script doesnt protect against Volumetric DDoS Attacks
 
 ### 🍁 Requirements:
-                                                                                 * iptables                                                                       
+
+* iptables
+
 * iptables-persistent (to save rules after reboot)
 
 * netfilter-persistent (to save rules on new distro's)

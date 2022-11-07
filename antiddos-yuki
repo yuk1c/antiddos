@@ -12,6 +12,8 @@
 # For example: on router (in this case, replace INPUT to FORWARD)
 # It will be give better protection
 
+# I recommend you to backup all data of your server before using this script
+
 ip6tables -F
 iptables -F
 
@@ -216,7 +218,8 @@ echo "net.ipv4.icmp_echo_ignore_broadcasts = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.secure_redirects = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.conf.all.accept_redirect = 0" >> /etc/sysctl.conf;
 # Leave 1 for security or set to 0 for compatibility (src_valid_mark)
-echo "net.ipv4.src_valid_mark = 1" >> /etc/sysctl.conf;
+# Option not tested
+# echo "net.ipv4.src_valid_mark = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_multicast = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_anycast = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf;

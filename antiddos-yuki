@@ -14,9 +14,6 @@
 
 # I recommend you to backup all data of your server before using this script
 
-ip6tables -F
-iptables -F
-
 # ------------------------------------
 
 # Allow only rate-limited ICMP and block useless types
@@ -225,23 +222,29 @@ echo "net.ipv6.echo_ignore_anycast = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_helper = 0" >> /etc/syctl.conf;
 echo "net.ipv4.ip_local_port_range=1024 65535" >> /etc/sysctl.conf
-echo "net.core.optmem_max = 25165824" >> /etc/sysctl.conf;
-echo "net.core.wmem_max = 67108864" >> /etc/sysctl.conf;
-echo "net.core.wmem_default = 31457280" >> /etc/sysctl.conf;
-echo "net.core.rmem_default = 31457280" >> /etc/sysctl.conf;
-echo "net.core.rmem_max = 67108864" >> /etc/sysctl.conf;
-echo "net.core.rmem_default = 31457280" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_tcp_timeout_time_wait = 5" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_tcp_loose = 0" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_max = 10000000" >> /etc/sysctl.conf;
-echo "net.ipv4.route.max_size = 8048576" >> /etc/sysctl.conf;
-echo "net.ipv4.tcp_max_syn_backlog = 16384" >> /etc/sysctl.conf;
 
-# Two options below may cause problems with network, use with caution
+# Little performance boost, but usually not needed
+# echo "net.ipv4.route.max_size = 8048576" >> /etc/sysctl.conf;
+# echo "net.ipv4.tcp_max_syn_backlog = 16384" >> /etc/sysctl.conf;
+
+# Options below may cause problems with network, use with caution
 # But they can increase network speed
 # echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf;
 # echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;
+# echo "net.core.optmem_max = 25165824" >> /etc/sysctl.conf;
+# echo "net.core.wmem_max = 67108864" >> /etc/sysctl.conf;
+# echo "net.core.wmem_default = 31457280" >> /etc/sysctl.conf;
+# echo "net.core.rmem_default = 31457280" >> /etc/sysctl.conf;
+# echo "net.core.rmem_max = 67108864" >> /etc/sysctl.conf;
+# echo "net.core.rmem_default = 31457280" >> /etc/sysctl.conf;
 # echo "net.ipv4.tcp_mtu_probing = 1" >> /etc/sysctl.conf;
+
+
+
+
 
 # Save all rules and tweaks
 
@@ -253,6 +256,8 @@ clear;
 
 echo "[+] Script changes applied
 [+] Now you have better protection against DDoS" | lolcat
+
+# ToDo:
 # Add to text above some info from README.md
 # For example: info about which attacks are blocked
 

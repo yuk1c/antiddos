@@ -1,33 +1,32 @@
 #!/bin/bash
-# This script will protect your server
-# against some attacks like DDoS, MiTM, etc, using iptables, kernel tuning
-# And it can improve performance of your server
-# Also, you can use it on your Linux PC
+# Script that written to protect Linux Servers/PCs and routera
 
-# Want to update the rules?
-# Remove previous using iptables -F and save them
-# And apply new rules
-
-# You can use some tweaks/rules before your server
-# For example: on router (in this case, replace INPUT to FORWARD)
+# You can use some tweaks on upstream linux router
+# But, in this case, you need to replace INPUT -> FORWARD
 # It will be give better protection
 
-# I recommend you to backup all data of your server before using this script
+# I recommend you to backup all data of your server
+# before using this script
+
+# ToDo:
+# Enable logs + customize it
+# Auto-backup of sysctl.conf and iptables rules
+# Use -j antiddos-yuki
+# Make "unstable" section
+# Move unstable rules to "unstable" section
 
 # ------------------------------------
 
-# Allow only rate-limited ICMP and block useless types
+# Main ICMP Protection
 iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
 iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT;
-
-# Protection against BlackNurse Attack
 iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -m limit --limit 1/s -j ACCEPT;
 
-# Protection against UDP DDoS On randports,
-# when you server flooding "icmp port unreach"
+# Protection against UDP DDoS on randports
+# when your server flooding "ICMP: port unreachable"
 iptables -A OUTPUT -p icmp --icmp-type port-unreach -j DROP;
 iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 3/s -j ACCEPT;
 
@@ -35,7 +34,7 @@ iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 3/s -j ACCE
 # May cause FPs
 iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 20 -j ACCEPT;
 
-# Block unusual TCP flags (good against some DDoS on TCP)
+# Rules against some TCP DDoS
 iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
 iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP;
 iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP;
@@ -50,49 +49,40 @@ iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP;
 iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP;
 iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP;
 
-# Block broadcast (good against spoof)
+# AntiSpoof (block broadcast)
 iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP;
 
-# Block some ports for additional protection
-iptables -t raw -A PREROUTING -p UDP --dport 19 -j DROP;
-iptables -t raw -A PREROUTING -p UDP --dport 7 -j DROP;
-iptables -t raw -A PREROUTING -p TCP --dport 135:139 -j DROP;
-iptables -t raw -A PREROUTING -p UDP --dport 135:139 -j DROP;
-iptables -t raw -A PREROUTING -p tcp --dport 445 -j DROP;
-iptables -t raw -A PREROUTING -p tcp --dport 1900 -j DROP;
-iptables -t raw -A PREROUTING -p tcp --dport 3389 -j DROP;
-iptables -t raw -A PREROUTING -p tcp --dport 25 -j DROP;
+# Additional protection
+iptables -t raw -A PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,138,129,445,1900,3389 -j DROP;
+iptables -t raw -A PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
 
-# Limit incoming UDP packets against UDP DDoS
+# Limit incoming UDP packets against UDP DoS
+# Set lower limit if 500/s doesnt help to mitigate attack
 iptables -A INPUT -p UDP -j DROP;
-iptables -A INPUT -p UDP -m limit --limit 400/s -j ACCEPT;
+iptables -A INPUT -p UDP -m limit --limit 500/s -j ACCEPT;
 
 # Block certain suspicious packets
-iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
-iptables -A INPUT -p udp -m udp -m string --algo bm --from 28 --to 29 --string "0123456789ABCDE" -j DROP;
-iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP;
-iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
-iptables -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP;
-iptables -A INPUT -p udp -m u32 --u32 "22&0xFFFF=0x0008" -j DROP;
-iptables -I INPUT -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP;
-iptables -A INPUT -m u32 --u32 "12&0xFFFF=0" -j DROP;
-iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
-iptables -A INPUT -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP;
+# Uncomment if you want to get additional protection
+# And if network speed doesnt matter for you
+#iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
+#iptables -A INPUT -p udp -m udp -m string --algo bm --from 28 --to 29 --string "0123456789ABCDE" -j DROP;
+#iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP;
+#iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
+#iptables -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP;
+#iptables -A INPUT -p udp -m u32 --u32 "22&0xFFFF=0x0008" -j DROP;
+#iptables -I INPUT -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP;
+#iptables -A INPUT -m u32 --u32 "12&0xFFFF=0" -j DROP;
+#iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
+#iptables -A INPUT -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP;
 
-# Block NTP, DNS (not only) spoofed attacks
-# ToDo: block other spoofs, use multiport
-iptables -t raw -A PREROUTING -p udp --sport 123 -j DROP;
-iptables -t raw -A PREROUTING -p udp --sport 53 -j DROP;
-iptables -t raw -A PREROUTING -p udp --sport 5432 -j DROP;
-iptables -t raw -A PREROUTING -p udp --sport 17185 -j DROP;
-iptables -t raw -A PREROUTING -p udp --sport 7001 -j DROP;
+# Block NTP, DNS spoofed attacks
+iptables -t raw -A PREROUTING -p udp -m multiport --sports 123,53,5432,17185,7001 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
-iptables -t raw -A PREROUTING -p udp --dport 5432 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 10 -j ACCEPT;
 iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 7 -j ACCEPT;
 
 # Connections limit
-iptables -A INPUT -p tcp -m connlimit --connlimit-above 150 -j DROP;
+iptables -A INPUT -p tcp -m connlimit --connlimit-above 100 -j DROP;
 
 # Allow only rate-limited TCP RST Packets against TCP RST Flood Attacks
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
@@ -103,7 +93,7 @@ iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
 iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP
 
-# Drop all fragmented and big packets on PREROUTING
+# Drop all fragmented packets
 # against most fraggle attacks
 iptables -t raw -A PREROUTING -f -j DROP;
 
@@ -122,18 +112,19 @@ iptables -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src;
 iptables -A antiddosyuki -t raw -j DROP;
 
 # Block some Layer3 Protocols
-iptables -A INPUT -p ah -j DROP;
-iptables -A INPUT -p esp -j DROP;
-iptables -A INPUT -p gre -j DROP;
+# Uncomment this to get additional protection
+# But it not recommended
+#iptables -A INPUT -p ah -j DROP;
+#iptables -A INPUT -p esp -j DROP;
+#iptables -A INPUT -p gre -j DROP;
 
 # Just IPv6 overall Protection
 ip6tables -t raw -A PREROUTING -p icmpv6 -j DROP;
 ip6tables -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
 ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 30 -j ACCEPT
 ip6tables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
-# Use the same fix (that in IPv4) if last rule disables internet access
 
-# Open SSH Port (fix ssh connection issues)
+# Fix possible ssh connection issues
 iptables -t raw -A PREROUTING -p tcp --dport 22 -m limit --limit 5/s --limit-burst 20 -j ACCEPT
 
 clear;
@@ -147,6 +138,7 @@ clear;
 echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf;
 
 # Reverse-path filter against spoofing your server
+# May cause troubles on some networks
 echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf;
 
 # You can uncomment option below if you dont use it on router
@@ -163,8 +155,8 @@ echo "net.ipv4.netfiltet.ip_conntrack_udp_timeout = 20" >> /etc/sysctl.conf;
 echo "fs.file-max = 2000000" >> /etc/sysctl.conf;
 
 # Increase max connections for better network performance
-# (Dont use this value on single-threaded servers)
-echo "net.core.somaxconn = 55555" >> /etc/sysctl.conf;
+# Use it only if your server is powerful
+# echo "net.core.somaxconn = 65535" >> /etc/sysctl.conf;
 
 # Enable TCP TW reuse for better performance
 echo "net.ipv4.tcp_tw_reuse = 1" >> /etc/sysctl.conf;
@@ -177,9 +169,11 @@ echo "vm.swappiness = 30" >> /etc/sysctl.conf;
 echo "kernel.exec-shield = 1" >> /etc/sysctl.conf;
 
 # Disable ARP Proxy, overall protection
-echo "net.ipv4.conf.all.proxy_arp = 0" >> /etc/sysctl.conf;
+# Use if you need ARP Protection
+# echo "net.ipv4.conf.all.proxy_arp = 0" >> /etc/sysctl.conf;
 
 # Increase SYN Backlog value for better performance and resistance to attacks
+# Dont use on slow servers
 echo "net.ipv4.tcp_max_syn_backlog = 16384" >> /etc/sysctl.conf;
 
 # Decrease SYN-ACK retries value against sophisticated attacks
@@ -188,9 +182,10 @@ echo "net.ipv4.tcp_synack_retries = 1" >> /etc/sysctl.conf;
 # Decrease SYN retries value, better protect against SYN Flood
 echo "net.ipv4.tcp_syn_retries = 2" >> /etc/sysctl.conf;
 
-# Increase netcore max backlog. Improves network speed under heavy load conditions
+# Increase netcore max backlog.
+# Improves network speed under heavy load conditions
+# If your server is single-threaded, dont use tweak below
 echo "net.core.netdev_max_backlog = 100000" >> /etc/sysctl.conf;
-# Dont use this value on single-threaded servers
 
 # ACK Loop DoS Attack Mitigation
 echo "net.ipv4.tcp_invalid_ratelimit = 4000" >> /etc/sysctl.conf;
@@ -203,7 +198,6 @@ echo "net.ipv4.tcp_invalid_ratelimit = 4000" >> /etc/sysctl.conf;
 # ToDo: increase IPv6 route table size and test it
 
 echo "net.ipv4.conf.all.mc_forwarding = 0" >> /etc/sysctl.conf;
-echo "net.ipv4.tcp_no_metrics_save = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.route.flush = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.conf;
@@ -214,11 +208,11 @@ echo "net.ipv4.icmp_ignore_bogus_error_responses = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.icmp_echo_ignore_broadcasts = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.secure_redirects = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.conf.all.accept_redirect = 0" >> /etc/sysctl.conf;
-# Leave 1 for security or set to 0 for compatibility (src_valid_mark)
-# Option not tested
-# echo "net.ipv4.src_valid_mark = 1" >> /etc/sysctl.conf;
+# Option not tested, may improve protection
+#echo "net.ipv4.src_valid_mark = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_multicast = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_anycast = 1" >> /etc/sysctl.conf;
+# RFC 1337 May cause problems
 echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_helper = 0" >> /etc/syctl.conf;
 echo "net.ipv4.ip_local_port_range=1024 65535" >> /etc/sysctl.conf

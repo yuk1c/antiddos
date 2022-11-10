@@ -25,6 +25,13 @@
 # Add L3 IPtables protocols blocking to the questions
 # More variables, and if lolcat not installed - use color
 # Replace some limits to /m instead of /s
+# Set lower connlimit (and test it)
+# REJECT For some rules
+# Maybe, add limits for OUTPUT Packets, like TCP RST
+# Better kernel tweaks
+# Block methods of stressers like TCP-REF, UDP-NULL
+# Block IPs Of free stressers using ipset+iptables
+# Return UFW and add rules for him
 
 # ------------------------------------
 # Variables
@@ -92,8 +99,12 @@ read -p "[+] Enable TCP TW Recycle and TCP ECN? Enable only if u really know, wh
 #iptables -N Spoof
 #iptables -N Fragmented
 #iptables -N Port-block
-iptables -N Conn-limit
+iptables -N Conn-limit;
 #iptables -N Invalid
+
+# ------------------------------------
+
+iptables -A Conn-limit -j DROP;
 
 # ------------------------------------
 

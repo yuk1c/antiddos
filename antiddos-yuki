@@ -92,7 +92,7 @@ read -p "[+] Enable TCP TW Recycle and TCP ECN? Enable only if u really know, wh
 #iptables -N Spoof
 #iptables -N Fragmented
 #iptables -N Port-block
-#iptables -N Conn-limit
+iptables -N Conn-limit
 #iptables -N Invalid
 
 # ------------------------------------

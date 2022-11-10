@@ -1,5 +1,5 @@
 #!/bin/bash
-# Script that written to protect Linux Servers/PCs and routera
+# Script that written to protect Linux Servers/PCs and routers
 
 # You can use some tweaks on upstream linux router
 # But, in this case, you need to replace INPUT -> FORWARD
@@ -8,12 +8,92 @@
 # I recommend you to backup all data of your server
 # before using this script
 
+# ------------------------------------
 # ToDo:
-# Enable logs + customize it
-# Auto-backup of sysctl.conf and iptables rules
-# Use -j antiddos-yuki
+# Make logging + customize it
+# Auto-backup of sysctl.conf and iptables rules before execution
+# Use -j antiddos-yuki or other custom -j
 # Make "unstable" section
 # Move unstable rules to "unstable" section
+# Normal sort of rules
+# Smart checks for some things
+# If no answer presented - use recommended value
+# New rules and tweaks (ONLY TESTED)
+# Err handler & possible autofixer
+# Full interactive configuration
+# Add RFC 1337 to the questions
+# Add L3 IPtables protocols blocking to the questions
+# More variables, and if lolcat not installed - use color
+# Replace some limits to /m instead of /s
+
+# ------------------------------------
+# Variables
+
+# Color
+LightBlue='\033[1;34m'
+
+# Logging (not tested and not used)
+# LOG="LOG --log-level debug --log-tcp-sequence --log-tcp-options"
+# LOG="$LOG --log-ip-options"
+
+# ------------------------------------
+# Show warning if script is not started as root (not tested)
+
+#if [ "$(whoami)" != "root" ]; then
+#        echo -e "${LightBlue}[!] Run this script as root"
+#        exit 255
+#fi
+
+# ------------------------------------
+
+clear;
+
+echo -e "${LightBlue}"
+echo "============================================="
+echo "           AntiDDoS Script by yuki           "
+echo "============================================="
+
+# ------------------------------------
+
+while true; do
+    echo -e "${LightBlue}\r"
+    read -p "[+] Use SynCookies? He protect you against SYN DoS, but may cause overload under attack (on slow servers), recommended: y >> " yn
+    case $yn in
+        [Yy]* ) echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf; break;;
+        [Nn]* ) echo Okay, skipped.; break;;
+        * ) echo "Enter correct answer, pls.";;
+    esac
+done
+read -p "[+] Enable reverse-path filter? He help you against spoofing, but may cause problems, recommended: y >> " yn
+    case $yn in
+        [Yy]* ) echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf;;
+        [Nn]* ) echo Okay, skipped.;;
+        * ) echo "Enter correct answer, pls.";;
+    esac
+
+read -p "[+] Enable MTU probing? It may increase network throughput, but on some servers it disables internet access, recommended: n >> " yn
+    case $yn in
+        [Yy]* ) echo "net.ipv4.tcp_mtu_probing = 1" >> /etc/sysctl.conf;;
+        [Nn]* ) echo Okay, skipped.;;
+        * ) echo "Enter correct answer, pls.";;
+    esac
+
+read -p "[+] Enable TCP TW Recycle and TCP ECN? Enable only if u really know, what are you doing. Recommended: n >> "
+    case $yn in
+        [Yy]* ) echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf; echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;;
+        [Nn]* ) echo Okay.;;
+        * ) echo "Enter correct answer, pls.";;
+    esac
+# ------------------------------------
+
+# Will be added soon
+#iptables -N TCP-Bogus-Flags
+#iptables -N Broadcast
+#iptables -N Spoof
+#iptables -N Fragmented
+#iptables -N Port-block
+#iptables -N Conn-limit
+#iptables -N Invalid
 
 # ------------------------------------
 
@@ -32,7 +112,12 @@ iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 3/s -j ACCE
 
 # Block SYN-Flood Attacks
 # May cause FPs
-iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 20 -j ACCEPT;
+iptables -t raw -A PREROUTING -p tcp --syn -j DROP;
+iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 5 -j ACCEPT;
+
+# Allow lo without any limits
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
 
 # Rules against some TCP DDoS
 iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
@@ -82,7 +167,7 @@ iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-bur
 iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 7 -j ACCEPT;
 
 # Connections limit
-iptables -A INPUT -p tcp -m connlimit --connlimit-above 100 -j DROP;
+iptables -A INPUT -p tcp -m connlimit --connlimit-above 100 -j Conn-limit;
 
 # Allow only rate-limited TCP RST Packets against TCP RST Flood Attacks
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
@@ -132,14 +217,6 @@ clear;
 # ============================================================
 # Sysctl tweaks (performance tweaks and additional protection)
 # ============================================================
-
-# TCP Syncookies - good against SYN Flood attack
-# If you server is slow - you need to test this tweak
-echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf;
-
-# Reverse-path filter against spoofing your server
-# May cause troubles on some networks
-echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf;
 
 # You can uncomment option below if you dont use it on router
 # And if you dont use VPN
@@ -223,21 +300,6 @@ echo "net.netfilter.nf_conntrack_max = 10000000" >> /etc/sysctl.conf;
 # Little performance boost, but usually not needed
 # echo "net.ipv4.route.max_size = 8048576" >> /etc/sysctl.conf;
 # echo "net.ipv4.tcp_max_syn_backlog = 16384" >> /etc/sysctl.conf;
-
-# Options below may cause problems with network, use with caution
-# But they can increase network speed
-# echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf;
-# echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;
-# echo "net.core.optmem_max = 25165824" >> /etc/sysctl.conf;
-# echo "net.core.wmem_max = 67108864" >> /etc/sysctl.conf;
-# echo "net.core.wmem_default = 31457280" >> /etc/sysctl.conf;
-# echo "net.core.rmem_default = 31457280" >> /etc/sysctl.conf;
-# echo "net.core.rmem_max = 67108864" >> /etc/sysctl.conf;
-# echo "net.core.rmem_default = 31457280" >> /etc/sysctl.conf;
-# echo "net.ipv4.tcp_mtu_probing = 1" >> /etc/sysctl.conf;
-
-
-
 
 
 # Save all rules and tweaks

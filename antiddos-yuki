@@ -40,6 +40,7 @@
 # Maximum simplification of questions
 # Limit new connections per second
 # Clearer code
+# Logs of script for debug
 
 # ------------------------------------
 
@@ -87,21 +88,21 @@ while true; do
         * ) echo "Enter correct answer, pls.";;
     esac
 done
-read -p "[+] Enable reverse-path filter? He help you against spoofing, but may cause problems, recommended: y >> " yn
+read -p "[+] Enable reverse-path filter? He help you against spoofing, but may cause small problems, recommended: y >> " yn
     case $yn in
         [Yy]* ) echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay, skipped.;;
         * ) echo "Enter correct answer, pls.";;
     esac
 
-read -p "[+] Enable MTU probing? It may increase network throughput, but on some servers it disables internet access, recommended: n >> " yn
+read -p "[+] Enable MTU probing? It may increase network throughput, but u need to allow ICMP on ur firewalls. Recommended: y >> " yn
     case $yn in
         [Yy]* ) echo "net.ipv4.tcp_mtu_probing = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay, skipped.;;
         * ) echo "Enter correct answer, pls.";;
     esac
 
-read -p "[+] Enable TCP TW Recycle and TCP ECN? Enable only if u really know, what are you doing. Recommended: n >> "
+read -p "[+] Enable TCP TW Recycle and TCP ECN? Recycle may cause problems with load-balancers. Recommended: n >> "
     case $yn in
         [Yy]* ) echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf; echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay, skipped.;;
@@ -176,8 +177,9 @@ iptables -t raw -A PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,1
 iptables -t raw -A PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
 
 # Limit incoming UDP packets against UDP DoS
-# Set lower limit if 500/s doesnt help to mitigate attack
-iptables -A INPUT -p UDP -j DROP;
+# Commented UDP DROP Rule (Below) cause network problems on many servers!
+# Do not use!
+# iptables -A INPUT -p UDP -j DROP;
 iptables -A INPUT -p UDP -m limit --limit 500/s -j ACCEPT;
 
 # Block certain suspicious packets

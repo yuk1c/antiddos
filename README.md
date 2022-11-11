@@ -38,11 +38,6 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * ipset
 
-* lolcat (cool output)
-
-* python3 (for lolcat)
-
-* pip3 (to install lolcat)
 
 ### ❓️ Want to drop all ICMP?
 ```

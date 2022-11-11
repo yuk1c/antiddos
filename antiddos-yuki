@@ -8,6 +8,8 @@
 # I recommend you to backup all data of your server
 # before using this script
 
+# And reset ur sysctl file to default
+
 # ------------------------------------
 # ToDo:
 # Make logging + customize it
@@ -34,12 +36,19 @@
 # Block IPs Of free stressers using ipset+iptables
 # Return UFW and add rules for him
 # Improve backup of sysctl
+# Remove previous iptables rules and chains before execution (need tests)
+# Maximum simplification of questions
+# Limit new connections per second
+# Clearer code
+
 # ------------------------------------
+
 # Backup sysctl file
 # if it exists it will be overwritten
 cp /etc/sysctl.conf /etc/sysctl.bckp
 
 # ------------------------------------
+
 # Variables
 
 # Color
@@ -50,6 +59,7 @@ LightBlue='\033[1;34m'
 # LOG="$LOG --log-ip-options"
 
 # ------------------------------------
+
 # Show warning if script is not started as root (not tested)
 
 #if [ "$(whoami)" != "root" ]; then
@@ -94,6 +104,13 @@ read -p "[+] Enable MTU probing? It may increase network throughput, but on some
 read -p "[+] Enable TCP TW Recycle and TCP ECN? Enable only if u really know, what are you doing. Recommended: n >> "
     case $yn in
         [Yy]* ) echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf; echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;;
+        [Nn]* ) echo Okay, skipped.;;
+        * ) echo "Enter correct answer, pls.";;
+    esac
+
+read -p "[+] Enable RFC 1337? He is prevent TCP TIME_WAIT assassination, but in very rare cases it may cause problems. Recommended: y >> "
+    case $yn in
+        [Yy]* ) echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay.;;
         * ) echo "Enter correct answer, pls.";;
     esac
@@ -133,8 +150,8 @@ iptables -t raw -A PREROUTING -p tcp --syn -j DROP;
 iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 5 -j ACCEPT;
 
 # Allow lo without any limits
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A OUTPUT -o lo -j ACCEPT
+iptables -A INPUT -i lo -j ACCEPT;
+iptables -A OUTPUT -o lo -j ACCEPT;
 
 # Rules against some TCP DDoS
 iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
@@ -154,7 +171,7 @@ iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
 # AntiSpoof (block broadcast)
 iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP;
 
-# Additional protection
+# Additional protection by blocking some ports
 iptables -t raw -A PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,138,129,445,1900,3389 -j DROP;
 iptables -t raw -A PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
 
@@ -306,8 +323,6 @@ echo "net.ipv6.conf.all.accept_redirect = 0" >> /etc/sysctl.conf;
 #echo "net.ipv4.src_valid_mark = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_multicast = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_anycast = 1" >> /etc/sysctl.conf;
-# RFC 1337 May cause problems
-echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_helper = 0" >> /etc/syctl.conf;
 echo "net.ipv4.ip_local_port_range=1024 65535" >> /etc/sysctl.conf
 echo "net.netfilter.nf_conntrack_tcp_timeout_time_wait = 5" >> /etc/sysctl.conf;
@@ -327,8 +342,9 @@ sysctl -p;
 clear;
 # Remove clear commands if u want to see stdout
 
-echo "[+] Script changes applied
-[+] Now you have better protection against DDoS" | lolcat
+echo -e "${LightBlue}"
+echo "[+] Script changes applied"
+echo "[+] Now you have better protection against DDoS"
 
 # ToDo:
 # Add to text above some info from README.md

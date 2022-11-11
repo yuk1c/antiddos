@@ -147,7 +147,10 @@ iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 3/s -j ACCE
 
 # Block SYN-Flood Attacks
 # May cause FPs
-iptables -t raw -A PREROUTING -p tcp --syn -j DROP;
+# Rule below that drop SYN is commented because its blocks all SYN packets
+# And ACCEPT rule doesnt help
+# Dont uncomment!
+# iptables -t raw -A PREROUTING -p tcp --syn -j DROP;
 iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 5 -j ACCEPT;
 
 # Allow lo without any limits

@@ -11,7 +11,8 @@
 # ------------------------------------
 # ToDo:
 # Make logging + customize it
-# Auto-backup of sysctl.conf and iptables rules before execution
+# Auto-backup of iptables rules before execution
+# Create dir in the home folder for backups
 # Use -j antiddos-yuki or other custom -j
 # Make "unstable" section
 # Move unstable rules to "unstable" section
@@ -32,6 +33,11 @@
 # Block methods of stressers like TCP-REF, UDP-NULL
 # Block IPs Of free stressers using ipset+iptables
 # Return UFW and add rules for him
+# Improve backup of sysctl
+# ------------------------------------
+# Backup sysctl file
+# if it exists it will be overwritten
+cp /etc/sysctl.conf /etc/sysctl.bckp
 
 # ------------------------------------
 # Variables

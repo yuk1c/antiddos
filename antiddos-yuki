@@ -40,6 +40,7 @@
 # Maximum simplification of questions
 # Limit new connections per second
 # Clearer code
+# Remove commented rules or fix / test it
 # Logs of script for debug
 
 # ------------------------------------
@@ -146,7 +147,6 @@ iptables -A OUTPUT -p icmp --icmp-type port-unreach -j DROP;
 iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 3/s -j ACCEPT;
 
 # Block SYN-Flood Attacks
-# May cause FPs
 # Rule below that drop SYN is commented because its blocks all SYN packets
 # And ACCEPT rule doesnt help
 # Dont uncomment!

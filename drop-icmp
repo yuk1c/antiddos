@@ -1,6 +1,7 @@
 #!/bin/bash
 # This script will drop ALL ICMP Packets
 # Its not recommended, but can help to mitigate ICMP Attacks
+LightBlue='\033[1;34m'
 
 # Delete previous ICMP rules
 iptables -t raw -D PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
@@ -26,4 +27,4 @@ ip6tables -t raw -A PREROUTING -p icmpv6 --icmp-type echo-request -j DROP;
 iptables-save;
 ip6tables-save;
 clear;
-echo "[+] Done. ICMP now are blocked on your system." | lolcat
+echo -e "$LightBlue[+] Done. ICMP now are blocked on your system."

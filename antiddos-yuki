@@ -20,27 +20,18 @@
 # Move unstable rules to "unstable" section
 # Normal sort of rules
 # Smart checks for some things
-# If no answer presented - use recommended value
-# New rules and tweaks (ONLY TESTED)
 # Err handler & possible autofixer
-# Full interactive configuration
-# Add RFC 1337 to the questions
-# Add L3 IPtables protocols blocking to the questions
-# More variables, and if lolcat not installed - use color
 # Replace some limits to /m instead of /s
 # Set lower connlimit (and test it)
 # REJECT For some rules
 # Maybe, add limits for OUTPUT Packets, like TCP RST
-# Better kernel tweaks
 # Block methods of stressers like TCP-REF, UDP-NULL
 # Block IPs Of free stressers using ipset+iptables
 # Return UFW and add rules for him
 # Improve backup of sysctl
-# Remove previous iptables rules and chains before execution (need tests)
-# Maximum simplification of questions
+# Remove previous iptables rules and chains before eyxecution (need tests)
 # Limit new connections per second
 # Clearer code
-# Remove commented rules or fix / test it
 # Logs of script for debug
 
 # ------------------------------------
@@ -89,31 +80,24 @@ while true; do
         * ) echo "Enter correct answer, pls.";;
     esac
 done
-read -p "[+] Enable reverse-path filter? He help you against spoofing, but may cause small problems, recommended: y >> " yn
+read -p "[+] Enable reverse-path filter? He help you against spoofing, but cause problems with asymmetric routing, recommended: y >> " yn
     case $yn in
         [Yy]* ) echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay, skipped.;;
         * ) echo "Enter correct answer, pls.";;
     esac
 
-read -p "[+] Enable MTU probing? It may increase network throughput, but u need to allow ICMP on ur firewalls. Recommended: y >> " yn
+read -p "[+] Enable MTU probing (RFC 4821)? It may increase network throughput, but it can break the network if all ICMP msgs are blocked. Recommended: n >> " yn
     case $yn in
         [Yy]* ) echo "net.ipv4.tcp_mtu_probing = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay, skipped.;;
         * ) echo "Enter correct answer, pls.";;
     esac
 
-read -p "[+] Enable TCP TW Recycle and TCP ECN? Recycle may cause problems with load-balancers. Recommended: n >> "
+read -p "[+] Enable TCP TW Recycle and TCP ECN? Recycle may cause problems with load-balancers, and ECN need to be supported by routers. Recommended: n >> "
     case $yn in
         [Yy]* ) echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf; echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay, skipped.;;
-        * ) echo "Enter correct answer, pls.";;
-    esac
-
-read -p "[+] Enable RFC 1337? He is prevent TCP TIME_WAIT assassination, but in very rare cases it may cause problems. Recommended: y >> "
-    case $yn in
-        [Yy]* ) echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf;;
-        [Nn]* ) echo Okay.;;
         * ) echo "Enter correct answer, pls.";;
     esac
 # ------------------------------------
@@ -235,12 +219,10 @@ iptables -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j a
 iptables -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src;
 iptables -A antiddosyuki -t raw -j DROP;
 
-# Block some Layer3 Protocols
-# Uncomment this to get additional protection
-# But it not recommended
-#iptables -A INPUT -p ah -j DROP;
-#iptables -A INPUT -p esp -j DROP;
-#iptables -A INPUT -p gre -j DROP;
+# Block unusual Layer3 Protocols
+iptables -A INPUT -p esp -j DROP;
+iptables -A INPUT -p gre -j DROP;
+iptables -A INPUT -p ah -j DROP;
 
 # Just IPv6 overall Protection
 ip6tables -t raw -A PREROUTING -p icmpv6 -j DROP;
@@ -249,53 +231,45 @@ ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 
 ip6tables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
 
 # Fix possible ssh connection issues
-iptables -t raw -A PREROUTING -p tcp --dport 22 -m limit --limit 5/s --limit-burst 20 -j ACCEPT
+iptables -t raw -A PREROUTING -p tcp --dport 22 -m limit --limit 5/s --limit-burst 20 -j ACCEPT;
 
 clear;
+
 
 # ============================================================
 # Sysctl tweaks (performance tweaks and additional protection)
 # ============================================================
 
-# You can uncomment option below if you dont use it on router
-# And if you dont use VPN
-# echo "net.ipv4.ip_forward = 0" >> /etc/sysctl.conf;
+# IP Forward for compatibility + against some problems
+echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf;
 
 # Decrease some timeouts for better TCP DDoS Mitigation
-echo "net.netfilter.nf_conntrack_tcp_timeout_last_ack = 20" >> /etc/sysctl.conf;
-echo "net.netfilter.nf_conntrack_tcp_timeout_close = 5" >> /etc/sysctl.conf;
-echo "net.netfilter.nf_conntrack_tcp_timeout_close_wait = 5" >> /etc/sysctl.conf;
-echo "net.ipv4.netfiltet.ip_conntrack_udp_timeout = 20" >> /etc/sysctl.conf;
+echo "net.netfilter.nf_conntrack_tcp_timeout_last_ack = 10" >> /etc/sysctl.conf;
+echo "net.netfilter.nf_conntrack_tcp_timeout_close = 3" >> /etc/sysctl.conf;
+echo "net.netfilter.nf_conntrack_tcp_timeout_close_wait = 3" >> /etc/sysctl.conf;
+echo "net.netfilter.nf_conntrack_tcp_timeout_time_wait = 3" >> /etc/sysctl.conf;
+echo "net.ipv4.netfilter.ip_conntrack_udp_timeout = 15" >> /etc/sysctl.conf;
 
 # Increase max open files for high-loaded servers
 echo "fs.file-max = 2000000" >> /etc/sysctl.conf;
 
 # Increase max connections for better network performance
-# Use it only if your server is powerful
+# Use 65535 only if your server is powerful
 # echo "net.core.somaxconn = 65535" >> /etc/sysctl.conf;
+echo "net.core.somaxconn = 50000" >> /etc/sysctl.conf;
 
 # Enable TCP TW reuse for better performance
 echo "net.ipv4.tcp_tw_reuse = 1" >> /etc/sysctl.conf;
 
-# Decrease swappiness for better performance
-# We dont use values like ~10 because they is too low
-echo "vm.swappiness = 30" >> /etc/sysctl.conf;
-
 # Enable ExecShield (additional protection)
 echo "kernel.exec-shield = 1" >> /etc/sysctl.conf;
 
-# Disable ARP Proxy, overall protection
-# Use if you need ARP Protection
-# echo "net.ipv4.conf.all.proxy_arp = 0" >> /etc/sysctl.conf;
+# Increase SYN Backlog value for resistance to attacks
+# if your server is slow – change value to 16384
+echo "net.ipv4.tcp_max_syn_backlog = 100000" >> /etc/sysctl.conf;
 
-# Increase SYN Backlog value for better performance and resistance to attacks
-# Dont use on slow servers
-echo "net.ipv4.tcp_max_syn_backlog = 16384" >> /etc/sysctl.conf;
-
-# Decrease SYN-ACK retries value against sophisticated attacks
+# Decrease SYN and SYN-ACK retries against SYN Floods
 echo "net.ipv4.tcp_synack_retries = 1" >> /etc/sysctl.conf;
-
-# Decrease SYN retries value, better protect against SYN Flood
 echo "net.ipv4.tcp_syn_retries = 2" >> /etc/sysctl.conf;
 
 # Increase netcore max backlog.
@@ -306,14 +280,14 @@ echo "net.core.netdev_max_backlog = 100000" >> /etc/sysctl.conf;
 # ACK Loop DoS Attack Mitigation
 echo "net.ipv4.tcp_invalid_ratelimit = 4000" >> /etc/sysctl.conf;
 
+# RFC 1337 Against TCP TW assassinations
+echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf
+
 
 # =========================================================
 # Overall network security hardening and performance tweaks
 # =========================================================
 
-# ToDo: increase IPv6 route table size and test it
-
-echo "net.ipv4.conf.all.mc_forwarding = 0" >> /etc/sysctl.conf;
 echo "net.ipv4.route.flush = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.conf;
@@ -324,20 +298,14 @@ echo "net.ipv4.icmp_ignore_bogus_error_responses = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.icmp_echo_ignore_broadcasts = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.secure_redirects = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.conf.all.accept_redirect = 0" >> /etc/sysctl.conf;
-# Option not tested, may improve protection
-#echo "net.ipv4.src_valid_mark = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_multicast = 1" >> /etc/sysctl.conf;
 echo "net.ipv6.echo_ignore_anycast = 1" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_helper = 0" >> /etc/syctl.conf;
 echo "net.ipv4.ip_local_port_range=1024 65535" >> /etc/sysctl.conf
-echo "net.netfilter.nf_conntrack_tcp_timeout_time_wait = 5" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_tcp_loose = 0" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_max = 10000000" >> /etc/sysctl.conf;
-
-# Little performance boost, but usually not needed
-# echo "net.ipv4.route.max_size = 8048576" >> /etc/sysctl.conf;
-# echo "net.ipv4.tcp_max_syn_backlog = 16384" >> /etc/sysctl.conf;
-
+echo "net.ipv4.route.max_size = 2147483647" >> /etc/sysctl.conf;
+echo "net.ipv6.route.max_size = 2147483647" >> /etc/sysctl.conf;
 
 # Save all rules and tweaks
 

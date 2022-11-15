@@ -8,31 +8,31 @@
 # I recommend you to backup all data of your server
 # before using this script
 
-# And reset ur sysctl file to default
+# And reset your sysctl file to default
 
 # ------------------------------------
 # ToDo:
-# Make logging + customize it
+
 # Auto-backup of iptables rules before execution
 # Create dir in the home folder for backups
-# Use -j antiddos-yuki or other custom -j
-# Make "unstable" section
-# Move unstable rules to "unstable" section
 # Normal sort of rules
 # Smart checks for some things
 # Err handler & possible autofixer
 # Replace some limits to /m instead of /s
-# Set lower connlimit (and test it)
 # REJECT For some rules
-# Maybe, add limits for OUTPUT Packets, like TCP RST
 # Block methods of stressers like TCP-REF, UDP-NULL
 # Block IPs Of free stressers using ipset+iptables
 # Return UFW and add rules for him
 # Improve backup of sysctl
-# Remove previous iptables rules and chains before eyxecution (need tests)
-# Limit new connections per second
 # Clearer code
 # Logs of script for debug
+# Make changelogs
+# Block methods of public DDoS scripts
+# Limit new connections per second
+# Re-add rule that blocks INVALID packets (it has caused problems before)
+# Better IPv6 Protection
+# Remove unused rules
+# New tweaks
 
 # ------------------------------------
 
@@ -42,32 +42,35 @@ cp /etc/sysctl.conf /etc/sysctl.bckp
 
 # ------------------------------------
 
+# Reset iptables to default
+iptables -F; # Remove all rules
+iptables -X; # Delete user-defined chains
+iptables -Z; # Reset counters in all chains
+
+# ------------------------------------
+
 # Variables
 
 # Color
 LightBlue='\033[1;34m'
 
-# Logging (not tested and not used)
-# LOG="LOG --log-level debug --log-tcp-sequence --log-tcp-options"
-# LOG="$LOG --log-ip-options"
-
 # ------------------------------------
 
-# Show warning if script is not started as root (not tested)
+# Show warning if script is not started as root
 
-#if [ "$(whoami)" != "root" ]; then
-#        echo -e "${LightBlue}[!] Run this script as root"
-#        exit 255
-#fi
+if [ "$(whoami)" != "root" ]; then
+        echo -e "${LightBlue}[!] Run this script as root"
+        exit 255
+fi
 
 # ------------------------------------
 
 clear;
 
 echo -e "${LightBlue}"
-echo "============================================="
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "           AntiDDoS Script by yuki           "
-echo "============================================="
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # ------------------------------------
 
@@ -102,72 +105,83 @@ read -p "[+] Enable TCP TW Recycle and TCP ECN? Recycle may cause problems with 
     esac
 # ------------------------------------
 
-# Will be added soon
-#iptables -N TCP-Bogus-Flags
-#iptables -N Broadcast
-#iptables -N Spoof
-#iptables -N Fragmented
-#iptables -N Port-block
-iptables -N Conn-limit;
-#iptables -N Invalid
+iptables -N UDP-DoS -t raw;           # UDP DoS Block
+iptables -N SYN-DoS -t raw;           # SYN DoS Block
+iptables -N Conn-limit -t raw;        # MAX Conn Limit
+iptables -N TCP-Bogus-Flags -t raw;   # TCP Bogus Flags
+iptables -N Port-Block -t raw;        # Block Some ports
+iptables -N Fragmented -t raw;        # Block Fragmented packets
+iptables -N Spoof -t raw;             # Block Spoofs
+iptables -N Broadcast -t raw;         # Block Packets from broadcast
+iptables -N ICMP -t raw;              # ICMP Protection
+iptables -N AntiDDoS -t raw;          # Other Rules
 
 # ------------------------------------
 
-iptables -A Conn-limit -j DROP;
+iptables -t raw -A UDP-DoS -j DROP;
+iptables -t raw -A SYN-DoS -j DROP;
+iptables -t raw -A Conn-limit -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -j DROP;
+iptables -t raw -A Port-Block -j DROP;
+iptables -t raw -A Fragmented -j DROP;
+iptables -t raw -A Spoof -j DROP;
+iptables -t raw -A Broadcast -j DROP;
+iptables -t raw -A ICMP -j DROP;
+iptables -t raw -A AntiDDoS -j DROP;
 
 # ------------------------------------
+
+# Allow SSH
+iptables -t raw -A PREROUTING -p tcp --dport ssh -m limit --limit 3/s --limit-burst 5 -j ACCEPT
+
+# Ratelimit for UDP, TCP per IP
+iptables -A UDP-DoS -p udp --match hashlimit --hashlimit-upto 400/second --hashlimit-mode srcip --hashlimit-name udpflood -j ACCEPT;
+iptables -A SYN-DoS -p tcp --match hashlimit --hashlimit-upto 30/second --hashlimit-mode srcip --hashlimit-name synflood -j ACCEPT;
 
 # Main ICMP Protection
 iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
-iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT;
+iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 3 -j ACCEPT;
 iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -j DROP;
 iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -m limit --limit 1/s -j ACCEPT;
 
 # Protection against UDP DDoS on randports
 # when your server flooding "ICMP: port unreachable"
 iptables -A OUTPUT -p icmp --icmp-type port-unreach -j DROP;
-iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 3/s -j ACCEPT;
+iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 30/m -j ACCEPT;
 
-# Block SYN-Flood Attacks
-# Rule below that drop SYN is commented because its blocks all SYN packets
-# And ACCEPT rule doesnt help
-# Dont uncomment!
-# iptables -t raw -A PREROUTING -p tcp --syn -j DROP;
-iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 5 -j ACCEPT;
+# Block SYN-Flood Attacks (old)
+# iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 5 -j ACCEPT;
+# Limit incoming UDP packets against UDP DoS (old)
+# iptables -A INPUT -p UDP -m limit --limit 500/s -j ACCEPT;
 
 # Allow lo without any limits
 iptables -A INPUT -i lo -j ACCEPT;
 iptables -A OUTPUT -o lo -j ACCEPT;
 
-# Rules against some TCP DDoS
-iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL ALL -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP;
-iptables -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP;
+# Rules against some bad TCP Packets that may be used in attacks
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags SYN,RST SYN,RST -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags FIN,ACK FIN -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,URG URG -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,FIN FIN -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,PSH PSH -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL ALL -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL NONE -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP;
 
-# AntiSpoof (block broadcast)
-iptables -A INPUT -m pkttype --pkt-type broadcast -j DROP;
+# Block all packets from broadcast
+# In my experience, this rule helps a bit to mitigate DDoS
+iptables -t raw -A Broadcast -m pkttype --pkt-type broadcast -j DROP;
 
-# Additional protection by blocking some ports
-iptables -t raw -A PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,138,129,445,1900,3389 -j DROP;
-iptables -t raw -A PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
-
-# Limit incoming UDP packets against UDP DoS
-# Commented UDP DROP Rule (Below) cause network problems on many servers!
-# Do not use!
-# iptables -A INPUT -p UDP -j DROP;
-iptables -A INPUT -p UDP -m limit --limit 500/s -j ACCEPT;
+# Get additional protection by blocking some ports
+iptables -t raw -A Port-Block -p UDP -m multiport --dports 7,19,25,135,136,137,138,129,445,1900,3389 -j DROP;
+iptables -t raw -A Port-Block -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
 
 # Block certain suspicious packets
 # Uncomment if you want to get additional protection
@@ -190,29 +204,23 @@ iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-bur
 iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 7 -j ACCEPT;
 
 # Connections limit
-iptables -A INPUT -p tcp -m connlimit --connlimit-above 100 -j Conn-limit;
+iptables -t raw -A Conn-limit -p tcp -m connlimit --connlimit-above 80 -j DROP;
 
 # Allow only rate-limited TCP RST Packets against TCP RST Flood Attacks
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
 iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 
-# Limit new connections on port 80 for additional protection
-# ToDo: make the same limit but for ssh port
-iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --set;
-iptables -I INPUT -p tcp --dport 80 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP
+# Limit new connections per IP to SSH for additional protection
+iptables -I INPUT -p tcp --dport 22 -m state --state NEW -m recent --set;
+iptables -I INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP;
 
-# Drop all fragmented packets
-# against most fraggle attacks
-iptables -t raw -A PREROUTING -f -j DROP;
+# Drop all fragmented packets (against Fraggle Attacks)
+iptables -t raw -A Fragmented -f -j DROP;
 
-# Block invalid packets against attacks that using invalid packets
-iptables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
-# If this rule disables internet access = use rules below
-# iptables -I INPUT -p TCP -m state --state INVALID -j DROP
-# iptables -I INPUT -p UDP -m state --state INVALID -j DROP
-# iptables -I INPUT -p ICMP -m state --state INVALID -j DROP
+# Block NEW packets that != SYN
+iptables -t raw -A PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
 
-# UDP spoofing load reduction
+# UDP Spoofing load reduction
 ipset create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 timeout 120;
 iptables -N antiddosyuki -t raw;
 iptables -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j antiddosyuki;
@@ -227,11 +235,8 @@ iptables -A INPUT -p ah -j DROP;
 # Just IPv6 overall Protection
 ip6tables -t raw -A PREROUTING -p icmpv6 -j DROP;
 ip6tables -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
-ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 30 -j ACCEPT
-ip6tables -t mangle -A PREROUTING -m state --state INVALID -j DROP;
+ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 30 -j ACCEPT;
 
-# Fix possible ssh connection issues
-iptables -t raw -A PREROUTING -p tcp --dport 22 -m limit --limit 5/s --limit-burst 20 -j ACCEPT;
 
 clear;
 
@@ -240,7 +245,7 @@ clear;
 # Sysctl tweaks (performance tweaks and additional protection)
 # ============================================================
 
-# IP Forward for compatibility + against some problems
+# IP Forward for compatibility with some unusual net configs
 echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf;
 
 # Decrease some timeouts for better TCP DDoS Mitigation
@@ -317,7 +322,7 @@ clear;
 
 echo -e "${LightBlue}"
 echo "[+] Script changes applied"
-echo "[+] Now you have better protection against DDoS"
+echo "[+] Now you have better protection against DDoSv"
 
 # ToDo:
 # Add to text above some info from README.md

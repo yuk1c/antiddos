@@ -10,7 +10,7 @@
 
 # And reset your sysctl file to default
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ToDo:
 
 # Auto-backup of iptables rules before execution
@@ -18,8 +18,6 @@
 # Normal sort of rules
 # Smart checks for some things
 # Err handler & possible autofixer
-# Replace some limits to /m instead of /s
-# REJECT For some rules
 # Block methods of stressers like TCP-REF, UDP-NULL
 # Block IPs Of free stressers using ipset+iptables
 # Return UFW and add rules for him
@@ -33,28 +31,31 @@
 # Better IPv6 Protection
 # Remove unused rules
 # New tweaks
+# Ratelimit for some L3 Protocols
+# Better ICMP protection
+# Protection for other protocols (L4)
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Backup sysctl file
 # if it exists it will be overwritten
 cp /etc/sysctl.conf /etc/sysctl.bckp
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Reset iptables to default
 iptables -F; # Remove all rules
 iptables -X; # Delete user-defined chains
 iptables -Z; # Reset counters in all chains
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Variables
 
 # Color
-LightBlue='\033[1;34m'
+LightBlue='\033[1;34m
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Show warning if script is not started as root
 
@@ -63,7 +64,7 @@ if [ "$(whoami)" != "root" ]; then
         exit 255
 fi
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 clear;
 
@@ -72,7 +73,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "           AntiDDoS Script by yuki           "
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 while true; do
     echo -e "${LightBlue}\r"
@@ -103,20 +104,19 @@ read -p "[+] Enable TCP TW Recycle and TCP ECN? Recycle may cause problems with 
         [Nn]* ) echo Okay, skipped.;;
         * ) echo "Enter correct answer, pls.";;
     esac
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 iptables -N UDP-DoS -t raw;           # UDP DoS Block
 iptables -N SYN-DoS -t raw;           # SYN DoS Block
-iptables -N Conn-limit -t raw;        # MAX Conn Limit
+iptables -N Conn-limit -t raw;        # Conn Limit
 iptables -N TCP-Bogus-Flags -t raw;   # TCP Bogus Flags
 iptables -N Port-Block -t raw;        # Block Some ports
 iptables -N Fragmented -t raw;        # Block Fragmented packets
 iptables -N Spoof -t raw;             # Block Spoofs
 iptables -N Broadcast -t raw;         # Block Packets from broadcast
 iptables -N ICMP -t raw;              # ICMP Protection
-iptables -N AntiDDoS -t raw;          # Other Rules
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 iptables -t raw -A UDP-DoS -j DROP;
 iptables -t raw -A SYN-DoS -j DROP;
@@ -127,40 +127,43 @@ iptables -t raw -A Fragmented -j DROP;
 iptables -t raw -A Spoof -j DROP;
 iptables -t raw -A Broadcast -j DROP;
 iptables -t raw -A ICMP -j DROP;
-iptables -t raw -A AntiDDoS -j DROP;
 
-# ------------------------------------
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#        Permissive rules
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Allow SSH
 iptables -t raw -A PREROUTING -p tcp --dport ssh -m limit --limit 3/s --limit-burst 5 -j ACCEPT
-
-# Ratelimit for UDP, TCP per IP
-iptables -A UDP-DoS -p udp --match hashlimit --hashlimit-upto 400/second --hashlimit-mode srcip --hashlimit-name udpflood -j ACCEPT;
-iptables -A SYN-DoS -p tcp --match hashlimit --hashlimit-upto 30/second --hashlimit-mode srcip --hashlimit-name synflood -j ACCEPT;
-
-# Main ICMP Protection
-iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
-iptables -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
-iptables -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
-iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 3 -j ACCEPT;
-iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -j DROP;
-iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -m limit --limit 1/s -j ACCEPT;
-
-# Protection against UDP DDoS on randports
-# when your server flooding "ICMP: port unreachable"
-iptables -A OUTPUT -p icmp --icmp-type port-unreach -j DROP;
-iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 30/m -j ACCEPT;
-
-# Block SYN-Flood Attacks (old)
-# iptables -t raw -A PREROUTING -p tcp --syn -m limit --limit 30/s --limit-burst 5 -j ACCEPT;
-# Limit incoming UDP packets against UDP DoS (old)
-# iptables -A INPUT -p UDP -m limit --limit 500/s -j ACCEPT;
 
 # Allow lo without any limits
 iptables -A INPUT -i lo -j ACCEPT;
 iptables -A OUTPUT -o lo -j ACCEPT;
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#          Protection
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Protection against UDP-DoS and TCP-DoS
+iptables -A UDP-DoS -p udp --match hashlimit --hashlimit-upto 400/second --hashlimit-mode srcip --hashlimit-name udpflood;
+iptables -A SYN-DoS -p tcp --syn --match hashlimit --hashlimit-upto 200/second --hashlimit-mode srcip --hashlimit-name synflood;
+
+# Main ICMP Protection
+iptables -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP;
+iptables -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP;
+iptables -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP;
+iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -j DROP;
+iptables -t raw -A PREROUTING -p icmp --icmp-type 8 -m limit --limit 1/s -j ACCEPT;
+iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 3 -j ACCEPT;
+
+# Protection against UDP DoS on random ports
+# When your server flooding "ICMP: port unreachable"
+iptables -A OUTPUT -p icmp --icmp-type port-unreach -j DROP;
+iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 30/m -j ACCEPT;
+
 # Rules against some bad TCP Packets that may be used in attacks
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags FIN,RST FIN,RST -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags SYN,RST SYN,RST -j DROP;
@@ -169,56 +172,36 @@ iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags FIN,ACK FIN -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,URG URG -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,FIN FIN -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,PSH PSH -j DROP;
-iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL ALL -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags SYN,ECN,CWR -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL NONE -j DROP;
-iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP;
-iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP;
-iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP;
-
-# Block all packets from broadcast
-# In my experience, this rule helps a bit to mitigate DDoS
-iptables -t raw -A Broadcast -m pkttype --pkt-type broadcast -j DROP;
+iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL ALL -j DROP;
 
 # Get additional protection by blocking some ports
-iptables -t raw -A Port-Block -p UDP -m multiport --dports 7,19,25,135,136,137,138,129,445,1900,3389 -j DROP;
+iptables -t raw -A Port-Block -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
 iptables -t raw -A Port-Block -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
 
-# Block certain suspicious packets
-# Uncomment if you want to get additional protection
-# And if network speed doesnt matter for you
-#iptables -A INPUT -p udp -m u32 --u32 "26&0xFFFFFFFF=0xfeff" -j DROP;
-#iptables -A INPUT -p udp -m udp -m string --algo bm --from 28 --to 29 --string "0123456789ABCDE" -j DROP;
-#iptables -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP;
-#iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
-#iptables -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP;
-#iptables -A INPUT -p udp -m u32 --u32 "22&0xFFFF=0x0008" -j DROP;
-#iptables -I INPUT -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP;
-#iptables -A INPUT -m u32 --u32 "12&0xFFFF=0" -j DROP;
-#iptables -I INPUT -p tcp -m tcp -m string --hex-string "|000000005010|" --algo kmp --from 28 --to 29 -m length --length 40 -j DROP;
-#iptables -A INPUT -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP;
-
-# Block NTP, DNS spoofed attacks
-iptables -t raw -A PREROUTING -p udp -m multiport --sports 123,53,5432,17185,7001 -j DROP;
+# Block AMP methods (spoofed attacks)
+iptables -t raw -A PREROUTING -p udp -m multiport --sports 123,53,5432,17185,7001,1900,9000 -j DROP;
 iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 10 -j ACCEPT;
 iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 7 -j ACCEPT;
 
-# Connections limit
+# Limit connections per one IP
 iptables -t raw -A Conn-limit -p tcp -m connlimit --connlimit-above 80 -j DROP;
 
-# Allow only rate-limited TCP RST Packets against TCP RST Flood Attacks
+# Protection against TCP RST Floods
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
 iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 
-# Limit new connections per IP to SSH for additional protection
-iptables -I INPUT -p tcp --dport 22 -m state --state NEW -m recent --set;
-iptables -I INPUT -p tcp --dport 22 -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP;
+# Limit new connections per IP to SSH
+iptables -I INPUT -p tcp --dport ssh -m state --state NEW -m recent --set;
+iptables -I INPUT -p tcp --dport ssh -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP;
 
 # Drop all fragmented packets (against Fraggle Attacks)
 iptables -t raw -A Fragmented -f -j DROP;
 
 # Block NEW packets that != SYN
-iptables -t raw -A PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+iptables -t raw -A PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP;
 
 # UDP Spoofing load reduction
 ipset create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 timeout 120;
@@ -232,19 +215,23 @@ iptables -A INPUT -p esp -j DROP;
 iptables -A INPUT -p gre -j DROP;
 iptables -A INPUT -p ah -j DROP;
 
-# Just IPv6 overall Protection
+# Block all packets from broadcast
+# In my experience, this rule helps a bit to mitigate some attacks
+iptables -t raw -A Broadcast -m pkttype --pkt-type broadcast -j DROP;
+
+# Just IPv6 simple protection
 ip6tables -t raw -A PREROUTING -p icmpv6 -j DROP;
 ip6tables -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
-ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 30 -j ACCEPT;
-
+ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 10 -j ACCEPT;
 
 clear;
 
 
-# ============================================================
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Sysctl tweaks (performance tweaks and additional protection)
-# ============================================================
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# make simplified comments
 # IP Forward for compatibility with some unusual net configs
 echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf;
 
@@ -289,16 +276,18 @@ echo "net.ipv4.tcp_invalid_ratelimit = 4000" >> /etc/sysctl.conf;
 echo "net.ipv4.tcp_rfc1337 = 1" >> /etc/sysctl.conf
 
 
-# =========================================================
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Overall network security hardening and performance tweaks
-# =========================================================
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 echo "net.ipv4.route.flush = 1" >> /etc/sysctl.conf;
+echo "net.ipv6.route.flush = 1" >> /etc/sysctl.conf;
+echo "net.ipv6.route.max_size = 2147483647" >> /etc/sysctl.conf;
+echo "net.ipv4.route.max_size = 2147483647" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.send_redirects = 0" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.accept_source_route = 0" >> /etc/sysctl.conf;
 echo "net.ipv6.conf.all.accept_redirect = 0" >> /etc/sysctl.conf;
 echo "net.ipv6.conf.all.accept_ra = 0" >> /etc/sysctl.conf;
-echo "net.ipv6.route.flush = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.icmp_ignore_bogus_error_responses = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.icmp_echo_ignore_broadcasts = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.conf.all.secure_redirects = 1" >> /etc/sysctl.conf;
@@ -309,8 +298,6 @@ echo "net.netfilter.nf_conntrack_helper = 0" >> /etc/syctl.conf;
 echo "net.ipv4.ip_local_port_range=1024 65535" >> /etc/sysctl.conf
 echo "net.netfilter.nf_conntrack_tcp_loose = 0" >> /etc/sysctl.conf;
 echo "net.netfilter.nf_conntrack_max = 10000000" >> /etc/sysctl.conf;
-echo "net.ipv4.route.max_size = 2147483647" >> /etc/sysctl.conf;
-echo "net.ipv6.route.max_size = 2147483647" >> /etc/sysctl.conf;
 
 # Save all rules and tweaks
 
@@ -318,11 +305,11 @@ iptables-save;
 ip6tables-save;
 sysctl -p;
 clear;
-# Remove clear commands if u want to see stdout
+# Remove clear commands if you want to see stdout
 
 echo -e "${LightBlue}"
 echo "[+] Script changes applied"
-echo "[+] Now you have better protection against DDoSv"
+echo "[+] Now you have better protection against DDoS!"
 
 # ToDo:
 # Add to text above some info from README.md

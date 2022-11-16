@@ -53,7 +53,7 @@ iptables -Z; # Reset counters in all chains
 # Variables
 
 # Color
-LightBlue='\033[1;34m
+LightBlue='\033[1;34m'
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

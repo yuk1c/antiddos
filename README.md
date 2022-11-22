@@ -21,7 +21,9 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * TCP ACK Flood
 
-* Fraggle Attacks
+* TCP Fragmented Attack 
+
+* UDP Fragmented Flood 
 
 * ICMP Flood 
 

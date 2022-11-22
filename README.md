@@ -6,6 +6,7 @@
 #### Fresh script for DDoS Mitigation using iptables and Kernel tweaks
 This bash script adds rules to iptables, that protects you from Attacks on L4 OSI Model, like SYN Flood. Also, applies kernel tweaks. Working only on Debian-based.
 ##### If you are under volumetric DDoS - this rules doesn't help to you, because this attacks overwhelm network capacity of your server. Use VPS/VDS/DS with AntiDDoS.
+##### Update kernel to latest version for best results
 
 #### ⚙️ Installation:
 ```
@@ -14,17 +15,28 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 #### ⚔️ He give you protection against:
 
-* TCP Flood attacks
+* UDP Flood
 
-* Fraggle attacks
+* TCP SYN Flood 
 
-* Spoofed attacks
+* TCP ACK Flood
 
-* Attacks, that using invalid packets
+* Fraggle Attacks
 
-* ICMP attacks
+* ICMP Flood 
 
-* UDP attacks
+* SMURF Attack
+
+* DNS Amplification
+
+* NTP Amplification
+
+* Spoofed Attacks
+
+* Attacks with invalid packets
+
+* [ToDo] Block IGMP and ARP attacks (sysctl+iptables+arptables)
+
 
 ##### I remind you, that this script doesnt protect against Volumetric DDoS Attacks
 

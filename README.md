@@ -3,69 +3,87 @@
 <a href="#"><img src="https://img.shields.io/github/last-commit/yuk1c/antiddos"/></a>
 <a href="#"><img src="https://img.shields.io/github/contributors/yuk1c/antiddos"/></a>
 [![DeepSource](https://deepsource.io/gh/yuk1c/antiddos.svg/?label=active+issues&show_trend=true&token=tVgsBqvfV3KBAOkyv3rCEYiV)](https://deepsource.io/gh/yuk1c/antiddos/?ref=repository-badge)
-#### Fresh script for DDoS Mitigation using iptables and Kernel tweaks
-This bash script adds rules to iptables, that protects you from Attacks on L4 OSI Model, like SYN Flood. Also, applies kernel tweaks. Working only on Debian-based.
-##### If you are under volumetric DDoS - this rules doesn't help to you, because this attacks overwhelm network capacity of your server. Use VPS/VDS/DS with AntiDDoS.
-##### Update kernel to latest version for best results
+### 🍃 Fresh script for DDoS Mitigation with iptables & kernel tweaks. Tested on Ubuntu 22.04.1 and Debian 11.
+##### If you are under Volumetric DDoS – buy server with protection.
+##### Update kernel to the latest version for best results.
 
-#### ⚙️ Installation:
+
+### ⚙️ Installation:
 ```
 apt update && apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
-#### ⚔️ He give you protection against:
+### ✨️ He give you protection against:
 
-* UDP Flood
-
-* TCP SYN Flood 
+* TCP SYN Flood
 
 * TCP ACK Flood
 
-* TCP Fragmented Attack 
+* TCP SYN-ACK Flood
 
-* UDP Fragmented Flood 
+* TCP RST Flood
 
-* ICMP Flood 
+* [ToDo] TCP FIN Flood
+
+* [ToDo] SIP Flood
+
+* [ToDo] TOS Flood
+
+* [ToDo] IP Null Attack
+
+* TCP Null Attack
+
+* TCP "Session Attack"
+
+* Some simple HTTP attacks
+
+* "Fragmented TCP" Attack
+
+* "Fragmented UDP" Attack
+
+* Ping Flood and some ICMP Floods
 
 * SMURF Attack
 
-* DNS Amplification
-
-* NTP Amplification
+* Fraggle Attack
 
 * Spoofed Attacks
 
 * Attacks with invalid packets
 
-* [ToDo] Block IGMP and ARP attacks (sysctl+iptables+arptables)
+* [ToDo] IGMP and ARP attacks (sysctl+iptables+arptables)
 
 
-##### I remind you, that this script doesnt protect against Volumetric DDoS Attacks
-
-#### Requirements:
+#### ☘️ Requirements:
 
 * iptables
+
+* ipset
 
 * iptables-persistent (to save rules after reboot)
 
 * netfilter-persistent (to save rules on new distro's)
 
-* ipset
 
 
-#### Want to drop all ICMP?
+#### To block ICMP (Not recommended):
 ```
 cd ~/antiddos; sudo bash drop-icmp
 ```
 
-I recommend you use drop-icmp script only if you under ICMP attack. Dont use it without reason.
+#### Just want to drop echo-requests?
+```
+iptables -I INPUT -p icmp --icmp-type echo-request -j DROP
+```
 
-#### You can update this script, using:
+
+#### To update the script:
 ```
 cd ~/antiddos && git pull && sudo bash antiddos-yuki
 ```
 
-#### For deleting all rules and this script, write:
+
+#### To uninstall:
 ```
 rm -fr ~/antiddos; sudo iptables -F; sudo iptables -Z; sudo iptables -X
 ```

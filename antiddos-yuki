@@ -5,8 +5,7 @@
 # But, in this case, you need to replace INPUT -> FORWARD
 # It will be give better protection
 
-# I recommend you to backup all data of your server
-# before using this script
+# I recommend you to backup all data of your server before using
 
 # And reset your sysctl file to default
 
@@ -35,6 +34,7 @@
 # Better ICMP protection
 # Protection for other protocols (L4)
 # Rewrite the script to Python (maybe)
+# Block TCP FIN Flood
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -58,7 +58,7 @@ LightBlue='\033[1;34m'
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# Show warning if script is not started as root
+# Show warning if the script is not started as root
 
 if [ "$(whoami)" != "root" ]; then
         echo -e "${LightBlue}[!] Run this script as root"
@@ -127,9 +127,11 @@ iptables -t raw -A ICMP -j DROP;
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Allow SSH
-iptables -t raw -A PREROUTING -p tcp --dport ssh -m limit --limit 3/s --limit-burst 5 -j ACCEPT
+# We do this to prevent problems with SSH
+iptables -t raw -A PREROUTING -p tcp --dport ssh -m limit --limit 3/s --limit-burst 5 -j ACCEPT;
 
 # Allow lo without any limits
+# To fix problems with reverse-proxy (like nginx)
 iptables -A INPUT -i lo -j ACCEPT;
 iptables -A OUTPUT -o lo -j ACCEPT;
 
@@ -154,7 +156,8 @@ iptables -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 3 -j AC
 iptables -A OUTPUT -p icmp --icmp-type port-unreach -j DROP;
 iptables -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 30/m -j ACCEPT;
 
-# Rules against some bad TCP Packets that may be used in attacks
+# Block bogus TCP flags
+# Helps fight off TCP Null Attack (only attack type w/o flags), TCP XMAS Attack, etc
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP;
@@ -170,31 +173,37 @@ iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags SYN,ECN,CWR -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL NONE -j DROP;
 iptables -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL ALL -j DROP;
 
-# Get additional protection by blocking some ports
-iptables -t raw -A Port-Block -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
-iptables -t raw -A Port-Block -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389 -j DROP;
+# Block some unsecure/useless ports
+# Helps fight off: SIP Flood, CharGEN DDoS, NetBIOS AMP, SSDP AMP, etc
+iptables -t raw -A Port-Block -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP;
+iptables -t raw -A Port-Block -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP;
 
-# Block AMP methods (spoofed attacks)
+# Limit NTP/DNS packets
+# Helps fight off DNS AMP and NTP AMP.
 iptables -t raw -A PREROUTING -p udp -m multiport --sports 123,53,5432,17185,7001,1900,9000 -j DROP;
-iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
-iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 10 -j ACCEPT;
-iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 3/s --limit-burst 7 -j ACCEPT;
+iptables -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 1 -j ACCEPT;
+iptables -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s -j ACCEPT;
+iptables -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 4/s -j ACCEPT;
 
-# Limit connections per one IP
+# Limit connections per one IP (max: 80)
+# Helps fight off "SLOW" attacks (attacks with many connections)
 iptables -t raw -A Conn-limit -p tcp -m connlimit --connlimit-above 80 -j DROP;
 
-# Protection against TCP RST Floods
+# Limit TCP "Reset" Packets per second
+# Helps fight off TCP RST Flood
 iptables -A INPUT -p tcp --tcp-flags RST RST -j DROP;
 iptables -A INPUT -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT;
 
-# Limit new connections per IP to SSH
+# Protect SSH against many connections per second from one IP
 iptables -I INPUT -p tcp --dport ssh -m state --state NEW -m recent --set;
-iptables -I INPUT -p tcp --dport ssh -m state --state NEW -m recent --update --seconds 10 --hitcount 50 -j DROP;
+iptables -I INPUT -p tcp --dport ssh -m state --state NEW -m recent --update --seconds 10 --hitcount 20 -j DROP;
 
-# Drop all fragmented packets (against Fraggle Attacks)
+# Drop all fragmented packets
+# Helps fight off Fragmented TCP/UDP/ICMP Attacks
 iptables -t raw -A Fragmented -f -j DROP;
 
 # Block NEW packets that != SYN
+# Helps fight off TCP ACK Flood, TCP SYN-ACK Flood, TCP RST/FIN Flood
 iptables -t raw -A PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP;
 
 # UDP Spoofing load reduction
@@ -205,18 +214,21 @@ iptables -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src;
 iptables -A antiddosyuki -t raw -j DROP;
 
 # Block unusual Layer3 Protocols
+# Helps fight off GRE/ESP/AH Flood
+# [!] May block IPsec
 iptables -A INPUT -p esp -j DROP;
 iptables -A INPUT -p gre -j DROP;
 iptables -A INPUT -p ah -j DROP;
 
 # Block all packets from broadcast
-# In my experience, this rule helps a bit to mitigate some attacks
+# Helps fight off Fraggle Attacks
 iptables -t raw -A Broadcast -m pkttype --pkt-type broadcast -j DROP;
 
 # Just IPv6 simple protection
+# Helps fight off: Simple ICMPv6 Attacks, Simple SYN Floods
 ip6tables -t raw -A PREROUTING -p icmpv6 -j DROP;
 ip6tables -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
-ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 20/s --limit-burst 10 -j ACCEPT;
+ip6tables -t raw -A PREROUTING -p tcp --syn -m limit --limit 3/s --limit-burst 10 -j ACCEPT;
 
 clear;
 
@@ -249,9 +261,6 @@ echo "net.core.somaxconn = 56000" >> /etc/sysctl.conf;
 
 # Enable TCP TW reuse for better performance
 echo "net.ipv4.tcp_tw_reuse = 1" >> /etc/sysctl.conf;
-
-# Enable ExecShield against many remote attacks
-echo "kernel.exec-shield = 1" >> /etc/sysctl.conf;
 
 # Increase SYN Backlog value for resistance to attacks
 echo "net.ipv4.tcp_max_syn_backlog = 16384" >> /etc/sysctl.conf;
@@ -318,11 +327,11 @@ iptables-save;
 ip6tables-save;
 sysctl -p;
 clear;
-# Remove clear commands if you want to see stdout
+# Remove "clear" commands if you want to see stdout
 
 echo -e "${LightBlue}"
-echo "[+] Script changes applied"
-echo "[+] Now you have better protection against DDoS!"
+echo "[✓] Script changes applied"
+echo "[+] Use 'iptables -L -v -n -x | head' to check info about rules"
 
 # ToDo:
 # Add to text above some info from README.md

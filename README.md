@@ -1,17 +1,23 @@
+<p align="center"> <h2 align="center">🍃 Fresh script for DDoS Mitigation with iptables & kernel tweaks</h2> </p> 
+
+
 <a href="#"><img src="https://img.shields.io/github/forks/yuk1c/antiddos"/></a>
 <a href="#"><img src="https://img.shields.io/github/license/yuk1c/antiddos"/></a>
 <a href="#"><img src="https://img.shields.io/github/last-commit/yuk1c/antiddos"/></a>
-<a href="#"><img src="https://img.shields.io/github/contributors/yuk1c/antiddos"/></a>
+<a href="#"><img src="https://img.shields.io/github/contributors/yuk1c/antiddos"/></a></p>
 [![DeepSource](https://deepsource.io/gh/yuk1c/antiddos.svg/?label=active+issues&show_trend=true&token=tVgsBqvfV3KBAOkyv3rCEYiV)](https://deepsource.io/gh/yuk1c/antiddos/?ref=repository-badge)
-### 🍃 Fresh script for DDoS Mitigation with iptables & kernel tweaks. Tested on Ubuntu 22.04.1 and Debian 11.
+
 ##### If you are under Volumetric DDoS – buy server with protection.
 ##### Update kernel to the latest version for best results.
 
+<hr>
 
-### ⚙️ Installation:
+<p align="center"> <h3 align="center">⚙️ Installation:</p></h3>
+
 ```
 apt update && apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
+<hr>
 
 ### ✨️ He give you protection against:
 
@@ -49,8 +55,6 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * Spoofed Attacks
 
-* Attacks with invalid packets
-
 * [ToDo] IGMP and ARP attacks (sysctl+iptables+arptables)
 
 
@@ -64,7 +68,7 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * netfilter-persistent (to save rules on new distro's)
 
-
+<hr>
 
 #### To block ICMP (Not recommended):
 ```
@@ -82,6 +86,7 @@ iptables -I INPUT -p icmp --icmp-type echo-request -j DROP
 cd ~/antiddos && git pull && sudo bash antiddos-yuki
 ```
 
+<hr>
 
 #### To uninstall:
 ```
@@ -91,6 +96,8 @@ Delete parameters from /etc/sysctl.conf manually
 
 
 ##### /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron (because sysctl -w changes resets after reboot)
+
+<hr>
 
 #### If you want to support me:
 

@@ -70,10 +70,6 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 <hr>
 
-#### To block ICMP (Not recommended):
-```
-cd ~/antiddos; sudo bash drop-icmp
-```
 
 #### Just want to drop echo-requests?
 ```

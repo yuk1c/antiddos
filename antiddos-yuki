@@ -32,11 +32,19 @@
 # Ratelimit for some L3 Protocols
 # Rewrite the script to Python (maybe)
 # Block TCP FIN Flood
-# Add iface to config
+# Add iface to config (-i -o args will be required) and use it + remove "ALLOW" for lo
 # Script for auto-uninstallation
 # Block IP of stressers
 # Ability to select action for rules: DROP or REJECT
 # Use nftables only (It will not improve efficiency on new distro's)
+# Tarpit for some rules
+# Policy "BLOCK" by default for INPUT
+# --ipv4 parameter
+# Gradient instead of one color
+# Variables for iptables-save etc
+# Move ToDo to separate file
+# OUTPUT => POSTROUTING
+# Rewrite headers
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -46,21 +54,19 @@ cp /etc/sysctl.conf /etc/sysctl.bckp
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-$IP -F;            # Remove all rules
-$IP -F -t nat;     # Remove all rules from nat table
-$IP -F -t mangle;  # Remove all rules from mangle table
-$IP -F -t raw;     # Remove all rules from raw table
-$IP -X;            # Delete user-defined chains
-$IP -Z;            # Reset counters in all chains
+$IP -F;          # Remove all rules
+$IP -X;          # Delete user-defined chains
+$IP -Z;          # Reset counters in all chains
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Configuration
 
-# ipset, iptables bin locations
+# ipset, iptables, ip6tables, nftables location
 IP="/sbin/iptables"
 IP6="/sbin/ip6tables"
 IPS="/sbin/ipset"
+NF="/sbin/nft" # not used
 
 # SSH Port
 SSH="22"
@@ -70,6 +76,9 @@ CL="100"
 
 # Logging
 LOG="LOG -m limit --limit 100/min --log-level debug --log-tcp-sequence --log-tcp-options --log-ip-options"
+
+# SYN Proxy for specified ports (Max ports here: 15)
+SYNPROXY="22,23,80,443,445"
 
 # Color
 LightBlue='\033[1;34m'
@@ -96,14 +105,14 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 while true; do
     echo -e "${LightBlue}\r"
-read -p "[+] Enable reverse-path filter? He blocks spoofed packets, but incompatible with asymmetric routing. Recommended: y >> " yn
+    read -p "[+] Enable reverse-path filter? He blocks spoofed packets, but incompatible with asymmetric routing. Recommended: y >> " yn
     case $yn in
-        [Yy]* ) echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf;;
-        [Nn]* ) echo Okay, skipped.;;
+        [Yy]* ) echo "net.ipv4.conf.all.rp_filter = 1" >> /etc/sysctl.conf; break;;
+        [Nn]* ) echo Okay, skipped.; break;;
         * ) echo "Enter correct answer, pls.";;
     esac
 done
-read -p "[+] Enable TCP TW Recycle and TCP ECN? Recycle may cause problems with load-balancers, and ECN need to be supported by routers. Recommended: n >> "
+    read -p "[+] Enable TCP TW Recycle and TCP ECN? Recycle may cause problems with load-balancers, and ECN need to be supported by routers. Recommended: n >> "
     case $yn in
         [Yy]* ) echo "net.ipv4.tcp_ecn = 1" >> /etc/sysctl.conf; echo "net.ipv4.tcp_tw_recycle = 1" >> /etc/sysctl.conf;;
         [Nn]* ) echo Okay, skipped.;;
@@ -148,7 +157,7 @@ $IP -t raw -A ICMP -j DROP;
 
 # Allow SSH
 # We do this to prevent problems with SSH
-$IP -t raw -A PREROUTING -p tcp --dport ssh -m limit --limit 3/s --limit-burst 5 -j ACCEPT;
+$IP -t raw -A PREROUTING -p tcp --dport $SSH -m limit --limit 3/s --limit-burst 5 -j ACCEPT;
 
 # Allow lo without any limits
 # To fix problems with reverse-proxy (like nginx)
@@ -221,9 +230,9 @@ $IP -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit
 $IP -I INPUT -p tcp --dport $SSH -m state --state NEW -m recent --set;
 $IP -I INPUT -p tcp --dport $SSH -m state --state NEW -m recent --update --seconds 60 --hitcount 20 -j DROP;
 
-# Enable SYN Proxy for port:80
-# ToDo: variable for port
-$IP -A INPUT -p tcp --dport 80 -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
+# Enable SYN Proxy for specified ports
+# Helps fight off powerful SYN floods
+$IP -A INPUT -p tcp -m multiport --dports $SYNPROXY -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm;
 
 # Drop all fragmented packets
 # Helps fight off Fragmented TCP/UDP/ICMP Attacks
@@ -379,14 +388,16 @@ echo "net.ipv4.tcp_slow_start_after_idle = 0" >> /etc/sysctl.conf;
 # Save all rules and tweaks
 iptables-save;
 ip6tables-save;
+netfilter-persistent save;
 #iptables-apply;
 sysctl -p;
 clear;
-# Remove "clear" commands if you want to see stdout
+# Remove "clear" if you want to see stdout
 
 echo -e "${LightBlue}"
-echo "[✓] Script changes applied"
-echo "[+] Use 'iptables -L -v -n -x | head' to check info about rules"
+echo "[✓] Script changes applied."
+echo "[+] Use 'iptables -L -v -n -x | head' to check info about rules."
+exit 0;
 
 # ToDo:
 # Add to text above some info from README.md

@@ -1,4 +1,4 @@
-<p align="center"> <h2 align="center">🍃 Fresh script for DDoS Mitigation with iptables & kernel tweaks</h2> </p> 
+<p align="center"> <h2 align="center">🍃 Fresh script for DDoS Mitigation with iptables-nft & kernel tweaks</h2> </p> 
 
 
 <a href="#"><img src="https://img.shields.io/github/forks/yuk1c/antiddos"/></a>
@@ -9,17 +9,20 @@
 
 ##### If you are under Volumetric DDoS – buy server with protection.
 ##### Update kernel to the latest version for best results.
+##### You can use tweaks and rules on your upstream hardware to offload your server.
 
 <hr>
 
 <p align="center"> <h3 align="center">⚙️ Installation:</p></h3>
 
 ```
-apt update && apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
+apt update && apt install iptables iptables-persistent netfilter-persistent git netfilter -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 <hr>
 
 ### ✨️ He give you protection against:
+
+* UDP Flood
 
 * TCP SYN Flood
 
@@ -29,13 +32,11 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * TCP RST Flood
 
+* SIP Flood
+
 * [ToDo] TCP FIN Flood
 
-* [ToDo] SIP Flood
-
 * [ToDo] TOS Flood
-
-* [ToDo] IP Null Attack
 
 * TCP Null Attack
 
@@ -64,14 +65,14 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * ipset
 
-* iptables-persistent (to save rules after reboot)
+* iptables-persistent (to save rules)
 
-* netfilter-persistent (to save rules on new distro's)
+* netfilter-persistent (to save netfilter rules)
 
 <hr>
 
 
-#### Just want to drop echo-requests?
+#### Just want to drop ping?
 ```
 iptables -I INPUT -p icmp --icmp-type echo-request -j DROP
 ```

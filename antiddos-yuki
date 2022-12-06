@@ -45,6 +45,7 @@
 # Move ToDo to separate file
 # OUTPUT => POSTROUTING
 # Rewrite headers
+# Auto-remove old netfilter rules
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -75,7 +76,7 @@ LightBlue='\033[1;36m'
 # Show warning if the script is not started as root
 
 if [ "$(whoami)" != "root" ]; then
-        echo -e "${LightBlue}[!] Run this script as root"
+        echo -e "${LightBlue}[!] Run this script as root" | pv -qL $[10+(-2 + RANDOM%50)]
         exit 255
 fi
 
@@ -396,8 +397,8 @@ clear;
 # Remove "clear" if you want to see stdout
 
 echo -e "${LightBlue}"
-echo "[✓] Script changes applied."
-echo "[+] Use 'iptables -L -v -n -x | head' to check info about rules."
+echo "[✓] Script changes applied." | pv -qL $[10+(-2 + RANDOM%50)]
+echo "[+] Use 'iptables -L -v -n -x | head' to check info about rules." | pv -qL $[10+(-2 + RANDOM%50)]
 exit 0;
 
 # ToDo:

@@ -6,25 +6,20 @@
 # It will be give better protection
 
 # I recommend you to backup all data of your server before using
-
 # And reset your sysctl file to default
+
+# Telegram of creator: @yuk1meow
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # ToDo:
 
 # Auto-backup of iptables rules before execution
-# Create dir in the home folder for backups
-# Normal sort of rules
-# Smart checks for some things
 # Err handler & possible autofixer
-# Block IPs Of free stressers using ipset+iptables
-# Return UFW and add rules for him
+# UFW
 # Improve backup of sysctl
 # Make separate file with tweaks + make symbolic link
 # [maybe] make separate file with rules too
-# Clearer code
 # Logs of script for debug
-# Make changelogs
 # Block methods of public DDoS scripts
 # Limit new connections per second
 # Re-add rule that blocks INVALID packets (it has caused problems before)
@@ -34,17 +29,13 @@
 # Block TCP FIN Flood
 # Add iface to config (-i -o args will be required) and use it + remove "ALLOW" for lo
 # Script for auto-uninstallation
-# Block IP of stressers
-# Ability to select action for rules: DROP or REJECT
-# Use nftables only (It will not improve efficiency on new distro's)
 # Tarpit for some rules
 # Policy "BLOCK" by default for INPUT
-# --ipv4 parameter
 # Gradient instead of one color
 # Variables for iptables-save etc
-# Move ToDo to separate file
 # OUTPUT => POSTROUTING
 # Rewrite headers
+# Auto-remove old netfilter rules
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -75,15 +66,9 @@ LightBlue='\033[1;36m'
 # Show warning if the script is not started as root
 
 if [ "$(whoami)" != "root" ]; then
-        echo -e "${LightBlue}[!] Run this script as root"
+        echo -e "${LightBlue}[!] Run this script as root" | pv -qL $[10+(-2 + RANDOM%50)]
         exit 255
 fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-"$IP" -F  # Remove all rules
-"$IP" -X  # Delete user-defined chains
-"$IP" -Z  # Reset counters in all chains
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -128,6 +113,12 @@ $IP -N Fragmented -t raw;        # Block Fragmented packets
 $IP -N Spoof -t raw;             # Block Spoofs
 $IP -N Broadcast -t raw;         # Block Packets from broadcast
 $IP -N ICMP -t raw;              # ICMP Protection
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"$IP" -F  # Remove all rules
+"$IP" -X  # Delete user-defined chains
+"$IP" -Z  # Reset counters in all chains
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -202,7 +193,6 @@ $IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags FIN,ACK FIN -j DROP;
 $IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,URG URG -j DROP;
 $IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,FIN FIN -j DROP;
 $IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ACK,PSH PSH -j DROP;
-$IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags SYN,ECN,CWR -j DROP;
 $IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL NONE -j DROP;
 $IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL ALL -j DROP;
 
@@ -210,6 +200,8 @@ $IP -t raw -A TCP-Bogus-Flags -p tcp --tcp-flags ALL ALL -j DROP;
 # Helps fight off: SIP Flood, CharGEN DDoS, NetBIOS AMP, SSDP AMP, etc
 $IP -t raw -A Port-Block -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP;
 $IP -t raw -A Port-Block -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP;
+
+# Block LAND Attack
 
 # Limit NTP/DNS packets
 # Helps fight off DNS AMP and NTP AMP
@@ -285,7 +277,6 @@ $IP -t raw -A Broadcast -m pkttype --pkt-type broadcast -j DROP;
 $IP6 -t raw -A PREROUTING -p icmpv6 -j DROP;
 $IP6 -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT;
 $IP6 -t raw -A PREROUTING -p tcp --syn -m limit --limit 3/s --limit-burst 10 -j ACCEPT;
-
 
 
 # ━━━━━━━━━━━━
@@ -385,6 +376,17 @@ echo "net.netfilter.nf_conntrack_max = 10000000" >> /etc/sysctl.conf;
 echo "kernel.sched_energy_aware = 1" >> /etc/sysctl.conf;
 echo "net.ipv4.tcp_slow_start_after_idle = 0" >> /etc/sysctl.conf;
 
+# Better domain name servers
+
+# Cloudflare DNS:
+echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+echo "nameserver 1.0.0.1" >> /etc/resolv.conf
+# Google DNS:
+echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+# Quad9 DNS:
+echo "nameserver 9.9.9.9" >> /etc/resolv.conf
+echo "nameserver 149.112.112.112" >> /etc/resolv.conf
 
 # Save all rules and tweaks
 iptables-save;
@@ -396,8 +398,8 @@ clear;
 # Remove "clear" if you want to see stdout
 
 echo -e "${LightBlue}"
-echo "[✓] Script changes applied."
-echo "[+] Use 'iptables -L -v -n -x | head' to check info about rules."
+echo "[✓] Script changes applied." | pv -qL $[10+(-2 + RANDOM%50)]
+echo "[+] Use 'iptables -L -v -n -x | head' to check info about rules." | pv -qL $[10+(-2 + RANDOM%50)]
 exit 0;
 
 # ToDo:

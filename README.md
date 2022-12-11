@@ -92,7 +92,7 @@ rm -fr ~/antiddos; sudo iptables -F; sudo iptables -Z; sudo iptables -X
 Delete parameters from /etc/sysctl.conf manually
 
 
-##### /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron (because sysctl -w changes resets after reboot)
+##### if /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron (because sysctl -w changes resets after reboot)
 
 <hr>
 

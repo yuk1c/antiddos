@@ -40,6 +40,7 @@
 # Rules based on TTL
 # Rewrite script!!!
 # Rewrite protocol names in capital letters
+# Correct limits
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -54,6 +55,9 @@ IPS="/sbin/ipset"
 # For example: 2222
 # Default: 22 (ssh)
 SSH="ssh"
+
+# Port for mail server
+MP="25"
 
 # Maximum connections per IP
 CL="100"
@@ -121,135 +125,142 @@ done
 
 # Allow lo without any limits
 # To fix problems with reverse-proxy (like nginx)
-$IP -I INPUT -i lo -j ACCEPT
-$IP -I OUTPUT -o lo -j ACCEPT
+"$IP" -I INPUT -i lo -j ACCEPT
+"$IP" -I OUTPUT -o lo -j ACCEPT
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #      >>  Protection  <<
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Protection against UDP-DoS and SYN-DoS
-$IP -t raw -I PREROUTING -p udp --match hashlimit --hashlimit-upto 400/second --hashlimit-mode srcip --hashlimit-name udpflood -j DROP
-$IP -t raw -I PREROUTING -p tcp --syn --match hashlimit --hashlimit-upto 4/second --hashlimit-mode srcip --hashlimit-name synflood -j DROP
+"$IP" -t raw -I PREROUTING -p udp --match hashlimit --hashlimit-above 400/second --hashlimit-mode srcip --hashlimit-name udpflood -j DROP
+"$IP" -t raw -I PREROUTING -p tcp --syn --match hashlimit --hashlimit-above 4/second --hashlimit-mode srcip --hashlimit-name synflood -j DROP
+"$IP" -t raw -I PREROUTING -p tcp -m state --state NEW -m hashlimit --hashlimit-above 5/s --hashlimit-name ratelimit -j DROP
 
 # Main ICMP Protection (Block ICMP Floods, ICMP Timestamping, etc)
-$IP -t raw -I PREROUTING -p icmp --icmp-type address-mask-request -j DROP
-$IP -t raw -I PREROUTING -p icmp --icmp-type router-solicitation -j DROP
-$IP -t raw -I PREROUTING -p icmp --icmp-type timestamp-request -j DROP
-$IP -t raw -I PREROUTING -p icmp --icmp-type echo-request -j DROP
-$IP -t raw -I PREROUTING -p icmp --icmp-type echo-request -m limit --limit 1/s -j ACCEPT
-$IP -t raw -I PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT
+"$IP" -t raw -I PREROUTING -p icmp --icmp-type address-mask-request -j DROP
+"$IP" -t raw -I PREROUTING -p icmp --icmp-type router-solicitation -j DROP
+"$IP" -t raw -I PREROUTING -p icmp --icmp-type timestamp-request -j DROP
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m limit --limit 1/s -j ACCEPT
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -j DROP
+"$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT
 
 # Block unusual TCP MSS Value
-$IP -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
+"$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
 
 # Limit outgoing ICMP Port-unreachable messages
 # Helps fight off UDP DDoS on random destination ports
-$IP -t raw -I POSTROUTING -p icmp --icmp-type port-unreach -j DROP;
-$IP -t raw -I POSTROUTING -p icmp --icmp-type port-unreach -m limit --limit 11/m -j ACCEPT
+"$IP" -t raw -A POSTROUTING -p icmp --icmp-type port-unreach -m limit --limit 11/m -j ACCEPT
+"$IP" -t raw -A POSTROUTING -p icmp --icmp-type port-unreach -j DROP
 
 # Block bogus TCP flags
 # Helps fight off TCP Null Attack (only attack type w/o flags, not with zero length), TCP XMAS Attack, etc
-$IP -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j DROP
-$IP -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -j DROP
-$IP -t raw -a PREROUTING -p tcp --tcp-flags ALL ALL -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,SYN FIN,SYN -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -j DROP
+"$IP" -t raw -a PREROUTING -p tcp --tcp-flags ALL ALL -j DROP
 
 # Block some unsecure/useless ports
 # Helps fight off: SIP Flood, CharGEN DDoS, NetBIOS AMP, SSDP AMP, etc
-$IP -t raw -I PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP
-$IP -t raw -I PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP
+"$IP" -t raw -I PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP
+"$IP" -t raw -I PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j DROP
 
 # Block LAND and BLAT Attack
-$IP -t raw -I PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP
+"$IP" -t raw -I PREROUTING -s 127.0.0.0/8 ! -i lo -j DROP
 
 # Block SYN sPort less than 1024
-$IP -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -j DROP
+"$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -j DROP
 
 # Limit NTP/DNS packets
 # Helps fight off DNS AMP and NTP AMP
-$IP -t raw -I PREROUTING -p udp -m multiport --sports 5432,17185,7001,1900,9000 -j DROP
-$IP -t raw -I PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 1 -j ACCEPT
-$IP -t raw -I PREROUTING -p udp --sport 53 -m limit --limit 4/s -j ACCEPT
-$IP -t raw -I PREROUTING -p udp --sport 5432 -m limit --limit 4/s -j ACCEPT
+"$IP" -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 1 -j ACCEPT
+"$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s -j ACCEPT
+"$IP" -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 4/s -j ACCEPT
+"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 5432,17185,7001,1900,9000,53,123 -j DROP
 
 # Limit connections per one IP (max: 80)
 # Helps fight off "SLOW" attacks (attacks with many connections)
-$IP -t raw -I PREROUTING -p tcp -m connlimit --connlimit-above $CL -j DROP
+"$IP" -t raw -I PREROUTING -p tcp -m connlimit --connlimit-above $CL --connlimit-mask 32 --connlimit-saddr -j DROP
 
 # Limit TCP "Reset" Packets per second
 # Helps fight off TCP RST Flood
-$IP -t raw -I PREROUTING -p tcp --tcp-flags RST RST -j DROP
-$IP -t raw -I PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -j DROP
 
 # Block FIN Flood (?)
 
 
 # Protect SSH against many connections per second from one IP
-$IP -I INPUT -p tcp --dport $SSH -m state --state NEW -m recent --set
-$IP -I INPUT -p tcp --dport $SSH -m state --state NEW -m recent --update --seconds 60 --hitcount 20 -j DROP
+"$IP" -I INPUT -p tcp --dport $SSH -m state --state NEW -m recent --set
+"$IP" -I INPUT -p tcp --dport $SSH -m state --state NEW -m recent --update --seconds 60 --hitcount 20 -j DROP
 
 # Enable SYN Proxy for specified ports
 # Helps fight off powerful SYN floods
-$IP -I INPUT -p tcp -m multiport --dports $SYNPROXY -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
-
-# Block TCP to DNS and NTP (?)
+"$IP" -I INPUT -p tcp -m multiport --dports $SYNPROXY -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
 
 
 # Drop all fragmented packets
 # Helps fight off Fragmented TCP/UDP/ICMP Attacks
-$IP -t raw -A PREROUTING -f -j DROP
+"$IP" -t raw -A PREROUTING -f -j DROP
 
 # Block NEW packets that != SYN
 # Helps fight off TCP ACK Flood, TCP SYN-ACK Flood, TCP RST/FIN Flood
-$IP -t raw -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+"$IP" -t raw -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
 
 # Beta rules: Block zero-length TCP and UDP
 # Helps fight off UDP-NULL, TCP-NULL attacks
-$IP -t raw -I PREROUTING -p tcp -m length --length 0 -j DROP
-$IP -t raw -I PREROUTING -p udp -m length --length 0 -j DROP
+"$IP" -t raw -I PREROUTING -p tcp -m length --length 0 -j DROP
+"$IP" -t raw -I PREROUTING -p udp -m length --length 0 -j DROP
 
 # UDP Spoofing load reduction
-$IPS create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 timeout 120
-$IP -N antiddosyuki -t raw
-$IP -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j antiddosyuki
-$IP -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src
-$IP -A antiddosyuki -t raw -j DROP
+"$IPS" create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 timeout 120
+"$IP" -N antiddosyuki -t raw
+"$IP" -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j antiddosyuki
+"$IP" -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src
+"$IP" -A antiddosyuki -t raw -j DROP
 
 # Block some IPs
 # Here we use ipset with big hashsize, so it doesnt affect performance
-$IPS create blacklist nethash hashsize 260000
-$IPS add blacklist 240.0.0.0/5
-$IPS add blacklist 172.16.0.0/12
-$IPS add blacklist 169.254.0.0/16
-$IPS add blacklist 224.0.0.0/3
-$IP -t raw -A PREROUTING -m set --match-set blacklist src -j DROP
+"$IPS" create blacklist nethash hashsize 260000
+"$IPS" add blacklist 240.0.0.0/5
+"$IPS" add blacklist 172.16.0.0/12
+"$IPS" add blacklist 169.254.0.0/16
+"$IPS" add blacklist 224.0.0.0/3
+"$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j DROP
 
 # Block unusual Layer3 Protocols
 # Helps fight off ESP/GRE/AH Flood
 # [!] May block IPsec
-$IP -t raw -A PREROUTING -p esp -j DROP
-$IP -t raw -A PREROUTING -p gre -j DROP
-$IP -t raw -A PREROUTING -p ah -j DROP
+"$IP" -t raw -A PREROUTING -p esp -j DROP
+"$IP" -t raw -A PREROUTING -p gre -j DROP
+"$IP" -t raw -A PREROUTING -p ah -j DROP
 
 # Block all packets from broadcast
 # Helps fight off Fraggle Attack & Smurf Attack
-$IP -t raw -I PREROUTING -m pkttype --pkt-type broadcast -j DROP
+"$IP" -t raw -I PREROUTING -m pkttype --pkt-type broadcast -j DROP
+
+# Block spoofed mails
+"$IP" -I INPUT -p tcp --dport $MP -m string --string "Subject"  --algo bm --to 15000 -j DROP
+
+# Block bypasses
+"$IP" -t mangle -A PREROUTING -p udp --sport 3283 -m length --length 1048 -j DROP
+
 
 # Just IPv6 simple protection
 # Helps fight off: Simple ICMPv6 Attacks, Simple SYN Floods
-$IP6 -t raw -A PREROUTING -p icmpv6 -j DROP
-$IP6 -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT
-$IP6 -t raw -A PREROUTING -p tcp --syn -m limit --limit 3/s --limit-burst 10 -j ACCEPT
+"$IP6" -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT
+"$IP6" -t raw -A PREROUTING -p icmpv6 -j DROP
+"$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 3/s --limit-burst 10 -j ACCEPT
+"$IP6" -t raw -A PREROUTING -p tcp --syn -j DROP
 
 
 # ━━━━━━━━━━━━
@@ -358,14 +369,17 @@ echo "nameserver 8.8.4.4" >> /etc/resolv.conf
 echo "nameserver 9.9.9.9" >> /etc/resolv.conf
 echo "nameserver 149.112.112.112" >> /etc/resolv.conf
 
-# Save all rules and tweaks
-iptables-save;
-ip6tables-save;
-netfilter-persistent save;
 #iptables-apply;
 sysctl -p;
 clear;
 # Remove "clear" if you want to see stdout
+
+read -p "[+] Do you want to keep rules after reboot?"
+    case $yn in
+        [Yy]* ) iptables-save && ip6tables-save && netfilter-persistent save;;
+        [Nn]* ) echo OK;;
+        * ) echo "Enter correct answer, pls.";;
+    esac
 
 echo -e "${LightBlue}"
 echo "[✓] Script changes applied." | pv -qL $[10+(-2 + RANDOM%50)]

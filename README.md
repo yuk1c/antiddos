@@ -1,7 +1,6 @@
-<p align="center"> <h2 align="center">🍃 Fresh script for DDoS Mitigation with iptables-nft & kernel tweaks</h2> </p> 
+<p align="center"> <h2 align="center">Fresh AntiDDoS Script based on iptables-nft & kernel tweaks</h2> </p> 
 
 <a href="#"><img src="https://img.shields.io/github/last-commit/yuk1c/antiddos"/></a>
-<a href="#"><img src="https://img.shields.io/github/contributors/yuk1c/antiddos"/></a></p>
 [![DeepSource](https://deepsource.io/gh/yuk1c/antiddos.svg/?label=active+issues&show_trend=true&token=tVgsBqvfV3KBAOkyv3rCEYiV)](https://deepsource.io/gh/yuk1c/antiddos/?ref=repository-badge)
 
 <hr>
@@ -17,18 +16,18 @@ apt update && apt install iptables iptables-persistent netfilter-persistent git 
 
 * iptables
 
-* ipset
+* ipset 
 
-* iptables-persistent (to save rules)
+* iptables-persistent
 
-* netfilter-persistent (to save netfilter rules)
+* netfilter-persistent
 
 <hr>
 
 
-#### Just want to drop ping?
+#### To block incoming ping requests:
 ```
-iptables -I INPUT -p icmp --icmp-type echo-request -j DROP
+sudo iptables -I INPUT -p icmp --icmp-type echo-request -j DROP
 ```
 
 
@@ -39,16 +38,7 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki
 
 <hr>
 
-#### To uninstall:
-```
-rm -fr ~/antiddos; sudo iptables -F; sudo iptables -Z; sudo iptables -X
-```
-
-
 ##### if /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron 
-
-<hr>
-
 ##### If you are under Volumetric DDoS – buy server with protection.
 ##### Update kernel to the latest version for best results.
 ##### You can use tweaks and rules on your upstream hardware to offload your server.

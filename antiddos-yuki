@@ -177,9 +177,6 @@ clear;
  "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536 -j DROP
  "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 1244 -j DROP
 
-# Block SYNOPT-ACK Method
- "$IP" -t raw -A PREROUTING -p tcp --sport 21 --dport 21 --tcp-flags SYN,ACK SYN,ACK -j DROP
-
 # Protect SSH against many conn attemps per minute from one IP
  "$IP" -t mangle -I PREROUTING -p tcp --dport $SSH -m state --state NEW -m recent --set
  "$IP" -t mangle -I PREROUTING -p tcp --dport $SSH -m state --state NEW -m recent --update --seconds 60 --hitcount 20 -j DROP
@@ -247,13 +244,13 @@ clear;
 
 # Advanced rules.
  # OVH Bypass payload:
-  "$IP" -A INPUT -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
 
  # Empty long string/payload:
-  "$IP" -A INPUT -m string --algo bm --string "" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "" -j DROP
 
  # SAO-UDP Bypass payload:
-  "$IP" -A INPUT -m string --algo bm --string "UUUUU" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "UUUUU" -j DROP
 
  # TCP Patches
   "$IP" -t raw -I PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0xd3da" -m state --state ESTABLISHED -j DROP
@@ -262,94 +259,70 @@ clear;
   "$IP" -t raw -I PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x38d3" -m state --state ESTABLISHED -j DROP
 
  # Botnet Attack filters
-  "$IP" -A INPUT -p udp -m u32 --u32 "2&0xFFFF=0x2:0x0100" -j DROP
-  "$IP" -A INPUT -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
-  "$IP" -A INPUT -p tcp -syn -m length --length 52 u32 --u32 "12&0xFFFFFF00=0xc838" -j DROP
-  "$IP" -A INPUT -p udp -m length --length 28 -m string --algo bm --string "0x0010" -j DROP
-  "$IP" -A INPUT -p udp -m length --length 28 -m string --algo bm --string "0x0000" -j DROP
-  "$IP" -A INPUT -p tcp -m length --length 40 -m string --algo bm --string "0x0020" -j DROP
-  "$IP" -A INPUT -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -j DROP
-  "$IP" -A INPUT -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
-  "$IP" -A INPUT -p tcp -syn -m length --length 52 -m string --algo bm --string "0xc838" -m state --state ESTABLISHED -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "2&0xFFFF=0x2:0x0100" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
+  "$IP" -t raw -A PREROUTING -p tcp -syn -m length --length 52 u32 --u32 "12&0xFFFFFF00=0xc838" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m length --length 28 -m string --algo bm --string "0x0010" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m length --length 28 -m string --algo bm --string "0x0000" -j DROP
+  "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0020" -j DROP
+  "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -j DROP
+  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
+  "$IP" -t mangle -A PREROUTING -p tcp -syn -m length --length 52 -m string --algo bm --string "0xc838" -m state --state ESTABLISHED -j DROP
 
  # Suspicious string filters
-  "$IP" -A INPUT -m string --algo bm --string "1" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "12345678910" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "1234567891011" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "123456789101112131415" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "1AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "2AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "3AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "4AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "5AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "6AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "7AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "8AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "9AA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "1AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "2AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "3AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "4AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "5AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "6AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "7AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "8AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "9AAA" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "CRI" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "STD" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "std" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "SAAM" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "ddos" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "DDOS" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "Ddos" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "DDoS" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "ddoS" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "udpflood" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "5AP" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "5AF" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "5AT" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "5AM" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "flood" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "STD" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "std" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "SAAM" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "DDOS" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "Ddos" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "DDoS" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddoS" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "udpflood" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AP" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AF" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AT" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AM" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
 
  # IPSLAP Method patches
-  "$IP" -A INPUT -m string --algo bm --string "0x00f" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0x00F" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00f" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00F" -j DROP
 
  # OVH Drop method patches
-  "$IP" -A INPUT -m string --algo bm --string "0xfe" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0xfe" -j DROP
 
  # Sophiscated NULL method patches
-  "$IP" -A INPUT -m string --algo bm --string "0x00" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0x000" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0x0000" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0x00000" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0x01" -j DROP
-  "$IP" -A INPUT -m string --algo bm --string "0x000000000001" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x000" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x0000" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x01" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x000000000001" -j DROP
 
  # NTP Reflection block
-  "$IP" -A INPUT -p udp -m u32 --u32 "0>>22&0x3C@8" -j DROP
-  "$IP" -A INPUT -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF=42" -j DROP
-  "$IP" -A INPUT -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF=42" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
 
  # Block private bypasses
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|424f4f5445524e4554|" -j DROP
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|41545441434b|" -j DROP
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|504r574552|" -j DROP
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|736b6964|" -j DROP
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|6c6e6f6172656162756e6386f6673b694464696573|" -j DROP
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|736b6954|" -j DROP
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|736b69646e6574|" -j DROP
-  "$IP" -A INPUT -p udp -m string --algo bm --hex-string "|4a554e4b2041545441434b|" -j DROP
-  "$IP" -I INPUT -p udp -m multiport --dports 16000:29000,"$SSH" -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
-  "$IP" -I INPUT -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
-  "$IP" -A INPUT -p udp -m u32 --u32 "6&0xFF=0,2:5,7:16,18:255" -j DROP
-  "$IP" -A INPUT -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP
-  "$IP" -A INPUT -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP
-  "$IP" -A INPUT -m string --algo bm --from 28 --to 29 --string "farewell" -j DROP
-  "$IP" -A INPUT -p udp -m u32 --u32 "28 & 0x00FF00FF = 0x00200020 && 32 & 0x00FF00FF = 0x00200020 && 36 & 0x00FF00FF = 0x00200020 && 40 & 0x00FF00FF = 0x00200020" -j DROP
-  "$IP" -I INPUT -p udp -m udp -m string --hex-string "|53414d50|" --algo kmp --from 28 --to 29 -j DROP 
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|424f4f5445524e4554|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|41545441434b|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|504r574552|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b6964|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|6c6e6f6172656162756e6386f6673b694464696573|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b6954|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b69646e6574|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|4a554e4b2041545441434b|" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m multiport --dports 16000:29000,"$SSH" -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "6&0xFF=0,2:5,7:16,18:255" -j DROP
+  "$IP" -t raw -A PREROUTING -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP
+  "$IP" -t raw -A PREROUTING -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --from 28 --to 29 --string "farewell" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "28 & 0x00FF00FF = 0x00200020 && 32 & 0x00FF00FF = 0x00200020 && 36 & 0x00FF00FF = 0x00200020 && 40 & 0x00FF00FF = 0x00200020" -j DROP
+  "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|53414d50|" --algo kmp --from 28 --to 29 -j DROP 
 
 
 # ━━━━━━━━━━━━

@@ -17,7 +17,6 @@
 # Block methods of public DDoS scripts
 # Better IPv6 Protection
 # Use tarpit for port-blocking to slow down port scanners ;)
-# Variables for "$IP"-save, netfilter-persistent...
 # Rewrite protocol names in capital letters
 # Add comments to the rules
 # Block incorrect sequence numbers
@@ -56,8 +55,7 @@ SYNPROXY="22,80,443"
 
 # Connection limit action
 # Recommended: REJECT
-# Under DDoS you can setDROP
- here
+# Under DDoS you can set DROP here
 # To reduce the load on the CPU
 CLA="REJECT --reject-with tcp-reset"
 
@@ -84,11 +82,11 @@ cp /etc/sysctl.conf{,.backup}
 # Delete previous netfilter rules
 nft flush chain inet filter input
 
-# Reset "$IP" counters
+# Reset iptables counters
 "$IP" -Z
 "$IPT" -Z
 
-# Remove user chains in "$IP"
+# Remove user chains in iptables
 "$IP" -X
 "$IPT" -X
 
@@ -429,14 +427,11 @@ clear;
  net.ipv4.conf.all.accept_source_route = 0
  net.ipv6.conf.all.accept_redirect = 0
  net.ipv6.conf.all.accept_ra = 0
- net.ipv4.conf.all.DROP
- _unicast_in_l2_multicast = 1
- net.ipv6.conf.all.DROP
- _unicast_in_l2_multicast = 1
+ net.ipv4.conf.all.drop_unicast_in_l2_multicast = 1
+ net.ipv6.conf.all.drop_unicast_in_l2_multicast = 1
  net.ipv6.icmp.all.ignore_anycast = 1
  net.ipv6.icmp.all.ignore_multicast = 1
- net.ipv6.conf.all.DROP
- _unsolicited_na = 1
+ net.ipv6.conf.all.drop_unsolicited_na = 1
  net.ipv6.conf.all.use_tempaddr = 2
  net.ipv4.conf.all.secure_redirects = 1
  net.ipv6.conf.all.accept_redirect = 0
@@ -504,11 +499,9 @@ clear;
 # Remove 'clear' if you want to see stdout
 
 echo -e "${LightBlue}"
-echo -e "[✓] Script changes applied, bu
-"$IP" rules are not saved.
+echo -e "[✓] Script changes applied, but iptables rules are not saved.
 Check the network now, and if it works, save the rules manually with sudo 'netfilter-persistent save'\n"
-echo -e "Also, you can check some info about rules (example:DROP
-ped packets),
+echo -e "Also, you can check some info about rules (example: dropped packets),
 With 'nft list ruleset'"
 exit 0;
 

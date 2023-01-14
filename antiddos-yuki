@@ -107,10 +107,7 @@ clear;
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # Protection against SYN-DoS
- # (Commented due to problems):
- # "$IP" -t raw -I PREROUTING -p udp --match hashlimit --hashlimit-above 400/second --hashlimit-mode srcip --hashlimit-name udpflood -j DROP
  "$IP" -t raw -I PREROUTING -p tcp --syn --match hashlimit --hashlimit-above 4/second --hashlimit-mode srcip --hashlimit-name synflood -j DROP
-
 
 # Main ICMP Protection (Block ICMP Floods, ICMP Timestamping, etc)
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type address-mask-request -j DROP
@@ -126,8 +123,8 @@ clear;
 
 # Limit outgoing ICMP Port-unreachable messages
 # Helps fight off UDP DDoS on random destination ports
- "$IP" -t raw -A POSTROUTING -p icmp --icmp-type port-unreach -m limit --limit 11/m -j ACCEPT
- "$IP" -t raw -A POSTROUTING -p icmp --icmp-type port-unreach -j DROP
+ "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 11/m -j ACCEPT
+ "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -j DROP
 
 # Block bogus TCP flags
 # Helps fight off TCP Null Attack, TCP XMAS Attack,
@@ -160,17 +157,16 @@ clear;
 # Limit NTP/DNS packets
 # Helps fight off DNS AMP and NTP AMP
  "$IP" -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 2/s --limit-burst 1 -j ACCEPT
- "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s -j ACCEPT
- "$IP" -t raw -A PREROUTING -p udp --sport 5432 -m limit --limit 4/s -j ACCEPT
- "$IP" -t raw -A PREROUTING -p udp -m multiport --sports 5432,17185,7001,1900,9000,53,123 -j DROP
+ "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 10 -j ACCEPT
+ "$IP" -t raw -A PREROUTING -p udp -m multiport --sports 53,123,17185,7001,1900,9000 -j DROP
 
 # Limit connections per one IP
 # Helps fight off "SLOW" attacks (attacks with many connections)
- "$IP" -t mangle -I PREROUTING -p tcp -m connlimit --connlimit-above $CL -j $CLA 
+ "$IP" -t mangle -I PREROUTING -p tcp -m connlimit --connlimit-above $CL -j $CLA
 
 # Limit TCP RST and TCP FIN Packets
 # Helps fight off TCP RST Flood
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 3 -j ACCEPT
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -j DROP
 
 # Block invalid SNMP Length
@@ -189,8 +185,8 @@ clear;
  "$IP" -I INPUT -p tcp -m multiport --dports $SYNPROXY -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
 
 # Drop packets with incorrect port
-# "$IP" -I INPUT -p udp ! --dport 0:65535 -m multiport --sports 0:65535 -j DROP
-# "$IP" -I INPUT -p tcp ! --dport 0:65535 -m multiport --sports 0:65535 -j DROP
+# "$IP" -t raw -I PREROUTING -p udp ! --dport 0:65535 -m multiport --sports 0:65535 -j DROP
+# "$IP" -t raw -I PREROUTING -p tcp ! --dport 0:65535 -m multiport --sports 0:65535 -j DROP
 
 # Drop all fragmented packets
 # Helps fight off Fragmented TCP/UDP/ICMP etc Attacks
@@ -204,13 +200,6 @@ clear;
 # Helps fight off UDP-NULL, TCP-NULL attacks
  "$IP" -t raw -I PREROUTING -p tcp -m length --length 0 -j DROP
  "$IP" -t raw -I PREROUTING -p udp -m length --length 0 -j DROP
-
-# UDP Spoofing load reduction
- # "$IPS" create antiddos_yuki hash:ip hashsize 16777216 maxelem 40000000 #timeout 120
- # "$IP" -N antiddosyuki -t raw
- # "$IP" -A PREROUTING -p udp -m set ! --match-set antiddos_yuki src -t raw -j antiddosyuki
- # "$IP" -A antiddosyuki -t raw -j SET --add-set antiddos_yuki src
- # "$IP" -A antiddosyuki -t raw -j DROP
 
 # Block some IPs
 # Here we use ipset with big hashsize, so it doesnt affect performance
@@ -227,8 +216,7 @@ clear;
  "$IP" -t raw -A PREROUTING -p gre -j DROP
  "$IP" -t raw -A PREROUTING -p ah -j DROP
 # If you need IPsec, u need to remove rule,
-# that blocks ESP, use iptables-nft -t raw -D PREROUTING -p esp -j DROP
-# To do it.
+# that blocks ESP and AH.
 
 # Block all packets from broadcast
 # Helps fight off Fraggle Attack & Smurf Attack
@@ -246,15 +234,12 @@ clear;
  # OVH Bypass payload:
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
 
- # Empty long string/payload:
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "" -j DROP
-
  # SAO-UDP Bypass payload:
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "UUUUU" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU" -j DROP
 
  # TCP Patches
   "$IP" -t raw -I PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0xd3da" -m state --state ESTABLISHED -j DROP
-  "$IP" -t raw -I PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED  -j DROP
+  "$IP" -t raw -I PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
   "$IP" -t raw -I PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -m state --state ESTABLISHED -j DROP
   "$IP" -t raw -I PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x38d3" -m state --state ESTABLISHED -j DROP
 
@@ -275,30 +260,15 @@ clear;
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "std" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "SAAM" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "DDOS" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "Ddos" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "DDoS" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddoS" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "udpflood" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AP" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AF" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AT" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "5AM" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "555AP" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "555AF" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "555AT" -j DROP
+  "$IP" -t raw -A PREROUTING -m string --algo bm --string "555AM" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
 
- # IPSLAP Method patches
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00f" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00F" -j DROP
-
- # OVH Drop method patches
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0xfe" -j DROP
-
  # Sophiscated NULL method patches
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x000" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x0000" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x01" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x000000000001" -j DROP
 
  # NTP Reflection block
@@ -375,7 +345,7 @@ clear;
  net.ipv4.tcp_synack_retries = 1
  net.ipv4.tcp_syn_retries = 2
 
-# Custom backlog for network device.
+# Custom backlog for NIC.
  net.core.netdev_max_backlog = 1000000
 
 # Custom ratelimit for invalid/bad TCP packets.
@@ -413,8 +383,7 @@ clear;
  net.ipv6.conf.all.ignore_anycast = 1
 
 # Prevent ARP Spoofing.
- net.ipv4.conf.all.DROP
- _gratuitous_arp = 1
+ net.ipv4.conf.all.drop_gratuitous_arp = 1
  net.ipv4.conf.all.arp_ignore = 1
 
 # Disable IGMP Multicast reports.

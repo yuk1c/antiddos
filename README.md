@@ -8,7 +8,7 @@
 <p align="center"> <h3 align="center">⚙️ Installation:</p></h3>
 
 ```
-apt update && apt install iptables iptables-persistent netfilter-persistent git netfilter -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
+apt update && apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 <hr>
 

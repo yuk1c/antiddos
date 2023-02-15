@@ -284,9 +284,6 @@ clear;
 # --------------------------------
  "$IPS" create blacklist nethash hashsize 260000
  "$IPS" add blacklist 240.0.0.0/5
- "$IPS" add blacklist 172.16.0.0/12
- "$IPS" add blacklist 169.254.0.0/16
- "$IPS" add blacklist 224.0.0.0/3
  "$IPS" add blacklist 162.142.125.0/24
  "$IPS" add blacklist 167.94.138.0/24
  "$IPS" add blacklist 198.20.69.0/24

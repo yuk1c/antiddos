@@ -3,9 +3,9 @@
 
 # You can use some tweaks on upstream linux hardware
 # But, in this case, you need to replace INPUT -> FORWARD
-# It will be give better protection to connected machines
+# It will give better protection to connected machines
 
-# I recommend you to backup all data of your server before using
+# I recommend you backup all data of your server before using
 # To make recover easer if this script will cause problems
 
 # Telegram of creator: @yuk1meow
@@ -14,11 +14,21 @@
 
 # --------------------------------
 # ToDo:
-# Logs of script for debug
-# Block methods of public DDoS scripts
+# Make script that will block echo rq
+# New readme ^^
+# New rules
+# DROP Policy by default (for INPUT) + logging
+# Better customization
+# Optimization
+# Kernel hardening
 # Better IPv6 Protection
 # Block incorrect sequence numbers
 # Multiport for webserver and SSH
+# Iplist in file
+# Updated sysctl tweaks
+# Automatic update by cron
+# Move fully to nftables
+# Tarpit + notrack for TPBA
 
 # --------------------------------
 
@@ -89,6 +99,18 @@ TPBA="DROP"
 # Recommended: DROP
 UPBA="DROP"
 
+# TCP SYN PPS limit (per IP)
+# You can replace "second" to "minute", if needed.
+# Recommended: 4/second
+SPL="4/second"
+
+# UDP PPS limit (per IP)
+# May cause problems.
+# If your server under this type of DDoS,
+# Try to set 300 here for short time.
+# Recommended: 1000
+UPL="1000"
+
 # Color
 LightBlue='\033[1;36m'
 
@@ -109,6 +131,7 @@ cp /etc/sysctl.conf{,.backup}
 # --------------------------------
 
 # Delete previous netfilter rules
+# It may cause probelems when custom rules needed.
 nft flush chain inet filter input
 
 # Reset iptables counters
@@ -119,7 +142,7 @@ nft flush chain inet filter input
 "$IP" -X
 "$IPT" -X
 
-clear;
+clear
 
 # --------------------------------
 
@@ -130,9 +153,14 @@ clear;
  "$IP" -I INPUT -i lo -j ACCEPT
  "$IP" -I OUTPUT -o lo -j ACCEPT
 
-# Protection against SYN-DoS
+# Protection against SYN-DoS (Hashlimit)
 # --------------------------------
- "$IP" -t raw -I PREROUTING -p tcp --syn --match hashlimit --hashlimit-above 4/second --hashlimit-mode srcip --hashlimit-name synflood -j DROP
+ "$IP" -t raw -I PREROUTING -p tcp --syn --match hashlimit --hashlimit-above "$SPL" --hashlimit-mode srcip --hashlimit-name synflood -j DROP
+
+# Protection against UDP-DoS (Limit)
+# --------------------------------
+ "$IP" -t raw -I PREROUTING -p udp -m limit --limit "$UPL"/s -j ACCEPT
+ "$IP" -t raw -A PREROUTING -p udp -j DROP
 
 # Main ICMP Protection (Block ICMP Floods, ICMP Timestamping, etc)
 # ----------------------------------------------------------------
@@ -170,8 +198,8 @@ clear;
 
 # Block some unsecure/useless ports to increase security
 # ----------------------------------------------------------------
- "$IP" -t raw -I PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j "$TPBA"
- "$IP" -t raw -I PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j "$UPBA"
+ "$IP" -t raw -I PREROUTING -p UDP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j "$UPBA"
+ "$IP" -t raw -I PREROUTING -p TCP -m multiport --dports 7,19,25,135,136,137,138,139,445,1900,3389,5060 -j "$TPBA"
 
 # Block LAND and BLAT Attack
 # --------------------------------
@@ -217,18 +245,20 @@ clear;
 
 # Drop UDP and TCP packets with incorrect source port
 # --------------------------------
- "$IP" -t raw -A PREROUTING -p udp ! --sport 0:65535 -j DROP
- "$IP" -t raw -A PREROUTING -p tcp ! --sport 0:65535 -j DROP
+ "$IP" -t raw -I PREROUTING -p udp ! --sport 0:65535 -j DROP
+ "$IP" -t raw -I PREROUTING -p tcp ! --sport 0:65535 -j DROP
 
 # Drop all fragmented packets
 # Helps fight off fragmented floods
 # --------------------------------
- "$IP" -t raw -A PREROUTING -f -j DROP
+ "$IP" -t raw -I PREROUTING -f -j DROP
 
 # Block new packets that not SYN
+# And block pattern of most used ACK Flood type
 # Helps fight off TCP ACK/FIN/RST floods
 # --------------------------------
  "$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+ "$IP" -t raw -I PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP
 
 # Block unusual TCP MSS Value
 # --------------------------------
@@ -257,7 +287,7 @@ clear;
 # Block some Layer3 Protocols
 # Helps fight off ESP/GRE/AH floods
 # If you need these protocols - uncomment these rules,
-# or replace PBA variable to ACCEPT
+# or set PBA variable to ACCEPT
 # --------------------------------
  "$IP" -t raw -A PREROUTING -p esp -j "$PBA"
  "$IP" -t raw -A PREROUTING -p gre -j "$PBA"
@@ -269,6 +299,7 @@ clear;
  "$IP" -t raw -I PREROUTING -m pkttype --pkt-type broadcast -j DROP
 
 # Block IPv4 Packets with SSR
+# --------------------------------
  "$IP" -t raw -A PREROUTING -m ipv4options --ssrr -j DROP
 
 # IPv6 Protection
@@ -449,7 +480,7 @@ clear;
 # --------------------------------
  net.ipv4.tcp_rfc1337 = 1
 
-# Custom big network buffers.
+# Custom large network buffers.
 # --------------------------------
  net.core.rmem_max = 33554432
  net.core.wmem_max = 33554432

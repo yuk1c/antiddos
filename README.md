@@ -8,18 +8,15 @@
 <p align="center"> <h3 align="center">⚙️ Installation:</p></h3>
 
 ```
-apt update && apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
+sudo apt update && sudo apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 <hr>
 
 <p align="center"> <h3 align="center">☘️ Required packages:</p></h3>
 
 * iptables
-
 * ipset 
-
 * iptables-persistent
-
 * netfilter-persistent
 
 <hr>
@@ -38,8 +35,8 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki
 
 <hr>
 
-##### if /etc/sysctl.conf tweaks not work on your system - use script named sysctl-tweaks. Execute as root, and add him to cron 
-##### If you are under Volumetric DDoS – buy server with protection.
+##### if /etc/sysctl.conf tweaks do not work on your system - use a script named sysctl-tweaks. Execute as root, and add him to cron 
+##### If you are under Volumetric DDoS – buy the server with protection.
 ##### Update kernel to the latest version for best results.
 ##### You can use tweaks and rules on your upstream hardware to offload your server.
 

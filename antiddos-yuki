@@ -20,7 +20,6 @@
 # DROP Policy by default (for INPUT) + logging
 # Better customization
 # Optimization
-# Kernel hardening
 # Better IPv6 Protection
 # Block incorrect sequence numbers
 # Multiport for webserver and SSH
@@ -29,7 +28,8 @@
 # Automatic update by cron
 # Move fully to nftables
 # Tarpit + notrack for TPBA
-
+# Auto-Backup netfilter rules
+# Cleanup code
 # --------------------------------
 
 # Configuration
@@ -125,22 +125,14 @@ fi
 
 # --------------------------------
 
-# Backup sysctl file, if it exists it will be overwritten
+# Backup sysctl file, if it exists - it will be overwritten
 cp /etc/sysctl.conf{,.backup}
 
 # --------------------------------
 
-# Delete previous netfilter rules
+# Delete previous netfilter rules.
 # It may cause probelems when custom rules needed.
 nft flush chain inet filter input
-
-# Reset iptables counters
-"$IP" -Z
-"$IPT" -Z
-
-# Remove user chains in iptables
-"$IP" -X
-"$IPT" -X
 
 clear
 
@@ -167,15 +159,13 @@ clear
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type address-mask-request -j DROP
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type router-solicitation -j DROP
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type timestamp-request -j DROP
- "$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m limit --limit 2/s -j ACCEPT
- "$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -j DROP
  "$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT
  "$IP" -t raw -A PREROUTING -p icmp -j DROP
 
 # Limit outgoing ICMP Port-unreachable messages
 # Helps fight off UDP DDoS on random destination ports
 # --------------------------------
- "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 11/m -j ACCEPT
+ "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 7/m -j ACCEPT
  "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -j DROP
 
 # Block bogus TCP flags
@@ -223,8 +213,10 @@ clear
 
 # Limit incoming TCP RST and TCP FIN packets
 # --------------------------------
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 3 -j ACCEPT
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN FIN -m limit --limit 2/s --limit-burst 2 -j ACCEPT
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -j DROP
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN FIN -j DROP
 
 # Protect SSH against many conn attemps per minute from one IP
 # --------------------------------
@@ -261,8 +253,10 @@ clear
  "$IP" -t raw -I PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP
 
 # Block unusual TCP MSS Value
+# I recommend you to set own max mss value If you know it.
+# If you have determined that this causes problems, try to increase it to 65535.
 # --------------------------------
- "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:65535 -j DROP
+ "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:10000 -j DROP
 
 # Block SYN sPort less than 1024
 # --------------------------------
@@ -350,13 +344,9 @@ clear
  "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA"
 
 # Advanced rules
- # OVH Bypass payload
+ # Some OVH Bypass payload
  # --------------------------------
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
-
- # SAO-UDP Bypass payload
- # --------------------------------
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU" -j DROP
 
  # TCP Patches
  # --------------------------------
@@ -382,7 +372,6 @@ clear
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "STD" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "std" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "SAAM" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
 
@@ -402,7 +391,6 @@ clear
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|424f4f5445524e4554|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|41545441434b|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|504r574552|" -j DROP
-  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b6964|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|6c6e6f6172656162756e6386f6673b694464696573|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b6954|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b69646e6574|" -j DROP
@@ -439,17 +427,16 @@ clear
 # --------------------------------
  net.netfilter.nf_conntrack_tcp_timeout_last_ack = 10
  net.netfilter.nf_conntrack_tcp_timeout_close = 5
- net.netfilter.nf_conntrack_tcp_timeout_close_wait = 3
- net.netfilter.nf_conntrack_tcp_timeout_time_wait = 1
- net.netfilter.nf_conntrack_tcp_timeout_syn_sent = 15
- net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 15
- net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 15
+ net.netfilter.nf_conntrack_tcp_timeout_close_wait = 5
+ net.netfilter.nf_conntrack_tcp_timeout_time_wait = 5
+ net.netfilter.nf_conntrack_tcp_timeout_syn_sent = 10
+ net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 10
+ net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 10
  net.netfilter.nf_conntrack_tcp_timeout_unacknowledged = 30
  net.netfilter.nf_conntrack_generic_timeout = 120
- net.netfilter.nf_conntrack_udp_timeout_stream = 30
  net.netfilter.nf_conntrack_udp_timeout = 10
- net.netfilter.nf_conntrack_icmp_timeout = 1
- net.netfilter.nf_conntrack_icmpv6_timeout = 1
+ net.netfilter.nf_conntrack_icmp_timeout = 2
+ net.netfilter.nf_conntrack_icmpv6_timeout = 3
 
 # SYN Cookies and custom SYN Backlog.
 # --------------------------------
@@ -463,18 +450,10 @@ clear
 # --------------------------------
  fs.file-max = 800000
 
-# Custom limit for max opened connections.
-# --------------------------------
- net.core.somaxconn = 20000
-
-# TCP TimeWait Reuse.
-# --------------------------------
- net.ipv4.tcp_tw_reuse = 1
-
 # Custom SYN and SYN-ACK Retries.
 # --------------------------------
  net.ipv4.tcp_synack_retries = 1
- net.ipv4.tcp_syn_retries = 2
+ net.ipv4.tcp_syn_retries = 1
 
 # RFC 1337.
 # --------------------------------
@@ -489,7 +468,7 @@ clear
 # --------------------------------
  net.ipv4.tcp_mtu_probing = 1
 
-# Custom insane route table size.
+# Custom large route table size.
 # --------------------------------
  net.ipv6.route.max_size = 2147483647
  net.ipv4.route.max_size = 2147483647
@@ -521,12 +500,13 @@ clear
 # --------------------------------
  net.ipv4.conf.all.drop_gratuitous_arp = 1
  net.ipv4.conf.all.arp_ignore = 1
+ net.ipv4.conf.all.arp_filter = 1
 
 # Disable IGMP Multicast reports.
 # --------------------------------
  net.ipv4.igmp_link_local_mcast_reports = 0
 
-# Overall kernel hardening.
+# Security hardening.
 # --------------------------------
  kernel.dmesg_restrict = 1
  kernel.kptr_restrict = 1
@@ -541,7 +521,7 @@ clear
  net.core.bpf_jit_harden = 2
  vm.unprivileged_userfaultfd = 0
  kernel.kexec_load_disabled = 1
- #kernel.sysrq = 0 # Disables sysrq (may cause problems)
+ #kernel.sysrq = 0 # Disables sysrq (not recommended)
  #net.ipv4.ip_forward = 0 # Disables ip_forward (may block VPN)
 
 # Performance tuning.
@@ -549,18 +529,12 @@ clear
  kernel.sched_tunable_scaling = 1
  net.ipv4.tcp_moderate_rcvbuf = 1
  net.ipv4.tcp_slow_start_after_idle = 0
- net.ipv4.tcp_sack = 1
- net.ipv4.tcp_fack = 1
- net.ipv4.tcp_ecn = 2
+ kernel.shmmax = 268435456
+ net.ipv4.tcp_tw_reuse = 1
 
-# Block exploits.
+# Enable ExecShield to block some remote attacks.
 # --------------------------------
- kernel.randomize_va_space = 2
  kernel.exec-shield = 2
-
-# Enable kernel panic autoreboot.
-# --------------------------------
- kernel.panic = 10
 
 # Ignore ICMP Bogus responses.
 # --------------------------------
@@ -579,15 +553,15 @@ clear
  net.netfilter.nf_conntrack_tcp_loose = 0
 
 # Reverse-path filter.
-# You should set '1' to '2' if you are use assymetric routing.
+# You should set '1' to '0' if you are use assymetric routing.
 # --------------------------------
  net.ipv4.conf.all.rp_filter = 1
 
-# Increase max conntrack table size.
+# Increase conntrack table size.
 # --------------------------------
  net.netfilter.nf_conntrack_max = 10000000
 
-# Power optimization.
+# Enable EAS.
 # --------------------------------
  kernel.sched_energy_aware = 1" > /etc/sysctl.conf
 

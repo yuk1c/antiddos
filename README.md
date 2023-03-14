@@ -1,42 +1,24 @@
-<p align="center"> <h2 align="center">Fresh AntiDDoS Script based on iptables-nft & kernel tweaks</h2> </p> 
+## A new AntiDDoS script based on ipt-nft & kernel tweaks
 
-<a href="#"><img src="https://img.shields.io/github/last-commit/yuk1c/antiddos"/></a>
-[![DeepSource](https://deepsource.io/gh/yuk1c/antiddos.svg/?label=active+issues&show_trend=true&token=tVgsBqvfV3KBAOkyv3rCEYiV)](https://deepsource.io/gh/yuk1c/antiddos/?ref=repository-badge)
-
-<hr>
-
-<p align="center"> <h3 align="center">⚙️ Installation:</p></h3>
-
+## Installation
 ```
-sudo apt update && sudo apt install iptables iptables-persistent netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
-```
-<hr>
-
-<p align="center"> <h3 align="center">☘️ Required packages:</p></h3>
-
-* iptables
-* ipset 
-* iptables-persistent
-* netfilter-persistent
-
-<hr>
-
-
-#### To block incoming ping requests:
-```
-sudo iptables -I INPUT -p icmp --icmp-type echo-request -j DROP
+sudo apt update && sudo apt install iptables ipset netfilter-persistent git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
+## Attack types that blocked by script:
+- Many Layer3 attacks like GRE Flood
+- Many types of TCP Flood attacks
+- Popular types of UDP Flood attacks
+- Some Layer7 attacks: HTTP Flood
 
-#### To update the script:
+## To quickly update the script:
 ```
-cd ~/antiddos && git pull && sudo bash antiddos-yuki
+cd ~/antiddos && git pull
 ```
 
-<hr>
+## You're under volumetric DDoS?
+- You should buy protected server, because this DDoS Attack type can't be blocked normally on server-side.
+- As a temporary solution, you can "tune" script, and set lower ratelimits. It will help a bit.
 
-##### if /etc/sysctl.conf tweaks do not work on your system - use a script named sysctl-tweaks. Execute as root, and add him to cron 
-##### If you are under Volumetric DDoS – buy the server with protection.
-##### Update kernel to the latest version for best results.
-##### You can use tweaks and rules on your upstream hardware to offload your server.
-
+## Tweaks works bad?
+- Try to update kernel. Tweaks are working normally on new kernel versions.

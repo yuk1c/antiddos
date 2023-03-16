@@ -13,7 +13,7 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent git -y &
 
 ## To quickly update the script:
 ```
-cd ~/antiddos && git pull
+cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 ```
 
 ## You're under volumetric DDoS?

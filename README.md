@@ -22,3 +22,6 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 
 ## Tweaks work badly?
 - Try to update the kernel. Tweaks are working normally only on new kernels.
+
+## SSH not work after applying rules?
+- Restart your server, then contact me (@yuk1meow) Telegram and describe problem. Then it will be fixed in next update(s).

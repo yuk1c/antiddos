@@ -17,11 +17,19 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 ```
 
 ## You're under volumetric DDoS?
-- You should buy a protected server because this DDoS Attack type can't be blocked normally on the server-side.
-- As a temporary solution, you can "tune" the script, and set lower ratelimits. It will help a bit.
+- You should buy a protected server because this DDoS Attack type can't be blocked normally on the server side.
+- As a temporary solution, you can "tune" the script, and set lower rate limits. It will help a bit.
 
-## Tweaks work badly?
-- Try to update the kernel. Tweaks are working normally only on new kernels.
+## Script was tested on:
+- Ubuntu 18-22.10
+- Debian 11
 
-## SSH not work after applying rules?
-- Restart your server, then contact me (@yuk1meow) Telegram and describe problem. Then it will be fixed in next update(s).
+## SSH not work or server wont boot?
+- 1 - Restart your server and contact me via Telegram (@yuk1meow).
+- 2 - Replace current sysctl.conf file with backup sysctl, or load another kernel.
+
+## Script may cause problems, if:
+- You use UFW or just DROP policy somewhere (set policy to ACCEPT)
+- You use other antiDDoS script (uninstall it)
+- You use modified kernel (install official kernel)
+- You use assymetric routing (don't use the script)

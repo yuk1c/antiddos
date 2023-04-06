@@ -20,11 +20,10 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 - You should buy a protected server because this DDoS Attack type can't be blocked normally on the server side.
 - As a temporary solution, you can "tune" the script, and set lower rate limits. It will help a bit.
 
-## Script was tested on:
-- Ubuntu 18-22.10
-- Debian 11
+## Script works with:
+- Ubuntu 20.04–22.04
 
-## SSH not work or server wont boot?
+# SSH not work or server wont boot?
 - 1 - Restart your server and contact me via Telegram (@yuk1meow).
 - 2 - Replace current sysctl.conf file with backup sysctl, or load another kernel.
 

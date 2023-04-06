@@ -354,8 +354,6 @@ clear
  # Block suspicious strings to mitigate impact of some attacks.
  # --------------------------------
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "STD" -j DROP
-  "$IP" -t raw -A PREROUTING -m string --algo bm --string "std" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
   "$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP

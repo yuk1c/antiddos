@@ -23,7 +23,7 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 ## Script works with:
 - Ubuntu 20.04–22.04
 
-# SSH not work or server wont boot?
+## SSH not work or server wont boot?
 - 1 - Restart your server and contact me via Telegram (@yuk1meow).
 - 2 - Replace current sysctl.conf file with backup sysctl, or load another kernel.
 

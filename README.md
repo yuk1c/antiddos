@@ -18,7 +18,7 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 
 ## You're under volumetric DDoS?
 - You should buy a protected server because this DDoS Attack type can't be blocked normally on the server side.
-- As a temporary solution, you can "tune" the script, and set lower rate limits. It will help a bit.
+- As a temporary solution, you can set lower rate limits. It will help a bit.
 
 ## Script work on:
 - Ubuntu 20.04–22.04
@@ -31,4 +31,4 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 - You use UFW or just DROP policy somewhere (set the input policy to ACCEPT)
 - You use another antiDDoS script (uninstall it)
 - You use a modified kernel (install the official kernel)
-- You use asymmetric routing (don't use the script)
+- You use complicated routing (don't use the script)

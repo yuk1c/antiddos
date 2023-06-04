@@ -8,45 +8,27 @@
 # Use with Fail2ban & Any IPS for best results.
 # Enjoy! Made by yuki with love <3.
 
-# --------------------------------
-# ToDo:
-# Maybe block echo requests
-# DROP Policy by default (for INPUT) + logging
-# Better customization
-# Optimization
-# Better IPv6 Protection
-# Block incorrect sequence numbers
-# Multiport for webserver and SSH
-# Iplist in the file
-# Automatic update by cron
-# Move fully to nftables
-# Tarpit + notrack for TPBA variable
-# Auto-Backup of an netfilter rules
-# Restrict length of some ICMP types
-# Block invalid packets
-# Add built-in guide how to capture attacks
-# AMP Autoblock
-# --------------------------------
-
+# ------------------------
 # Configuration
 # ------------------------
 
-# ipt-nft, ip6t-nft, ipset
+# ipt-nft, ip6t-nft, ipset, nft
 IP="/sbin/iptables-nft"
 IP6="/sbin/ip6tables-nft"
 IPS="/sbin/ipset"
+NFT="/sbin/nft"
 
 # SSH Port
 # For example: 2222
-# You dont have SSH?
-# Then dont touch this
+# You don't have SSH?
+# Then don't touch this
 # Default: 22 (ssh)
 SSH="22"
 
-# Port of your webserver
-# For example: 8080
-# You dont have webserver?
-# Then dont touch this
+# Port(s) of your webserver(s)
+# For example: 8080,8000
+# You don't have webserver?
+# Then don't touch this
 # Default: 80 (http)
 HTTP="80"
 
@@ -55,23 +37,27 @@ HTTP="80"
 SYNPROXY="22,80,443"
 
 # Connection limit (per one IP)
-# Recommended: 100
+# Recommended: 100 connections
 # If you server has only SSH,
-# And you are under TCP DDoS,
+# And you're under TCP DDoS,
 # You can set here value ~50
 CL="100"
 
 # Connection limit action
-# Recommended: REJECT
+# Recommended: REJECT with tcp-reset
 # Under DDoS you can set DROP here
 # To reduce the load on the CPU
 CLA="REJECT --reject-with tcp-reset"
 
-# Useragent block action
+# UserAgent block action
 # Recommended: REJECT
 # You should use WAF if you're under attack
 # Or if you're using HTTPS+HSTS
 UBA="REJECT --reject-with tcp-reset"
+
+# UDP to SSH Block action
+# Recommended: DROP
+USBA="DROP"
 
 # Proto block action
 # Recommended: ICMP proto unreach message
@@ -92,22 +78,30 @@ TPBA="DROP"
 # Recommended: DROP
 UPBA="DROP"
 
-# TCP SYN PPS limit (per IP)
+# SYN PPS limit (per IP)
+# May cause problems.
 # Recommended: 4/s
 SPL="4/s"
 
+# ACK PPS limit (per IP)
+# May cause problems.
+# Recommended: 25/s
+APL="2000/s"
+
+# SYN-ACK PPS limit (per IP)
+# May cause problems.
+# Recommended: 10/s
+SAPL="15/s"
+
+# ACK-PSH PPS limit (per IP)
+# May cause problems.
+# Recommended: 25/s
+APPL="55/s"
+
 # UDP PPS limit (per IP)
 # May cause problems.
-# If your server under this type of DDoS,
-# Try to set 300 here for short time.
-# Recommended: 700
-UPL="700"
-
-# UDP to SSH Block action
-# Recommended: DROP
-USBA="DROP"
-
-# +++++++
+# Recommended: 750
+UPL="750/s"
 
 # Color
 LightBlue='\033[1;36m'
@@ -117,7 +111,7 @@ LightBlue='\033[1;36m'
 # Return error if the script isn't started as root.
 
 if [ "$(whoami)" != "root" ]; then
-         echo -e "${LightBlue}[!] Run this script as root"
+         echo -e "${LightBlue}[!] Run this script as root."
         exit 255
 fi
 
@@ -126,9 +120,13 @@ fi
 # Create backup of the sysctl.conf. Exists? Will be overwritten.
 cp /etc/sysctl.conf{,.backup}
 
-# Flush chain "filter" to prevent some problems.
-nft flush chain inet filter input
+# Delete all rules to prevent some problems.
+nft flush ruleset
 clear
+
+# Set default policies to ACCEPT.
+"$IP" -P INPUT ACCEPT
+"$IP" -P OUTPUT ACCEPT
 
 # Delete "blacklist" ip set.
 "$IPS" destroy blacklist
@@ -141,16 +139,19 @@ clear
  "$IP" -I INPUT -i lo -j ACCEPT
  "$IP" -I OUTPUT -o lo -j ACCEPT
 
-# Limit SYN PPS to mitigate SYN Floods.
+# Limit SYN/SYN-ACK/ACK/ACK-PSH PPS to mitigate SYN/SYN-ACK/ACK/ACK-PSH floods.
 # --------------------------------
  "$IP" -t raw -I PREROUTING -p tcp --syn --match hashlimit --hashlimit-above "$SPL" --hashlimit-mode srcip --hashlimit-name synflood -j DROP
+ "$IP" -t raw -I PREROUTING -p tcp --tcp-flags ACK ACK --match hashlimit --hashlimit-above "$APL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackflood -j DROP
+ "$IP" -t raw -I PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK --match hashlimit --hashlimit-above "$SAPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name synackflood -j DROP
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH --match hashlimit --hashlimit-above "$APPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackpshflood -j DROP
 
 # Limit UDP PPS to mitigate UDP Floods.
 # --------------------------------
- "$IP" -t raw -I PREROUTING -p udp -m limit --limit "$UPL"/s -j ACCEPT
+ "$IP" -t raw -I PREROUTING -p udp -m limit --limit "$UPL" -j ACCEPT
  "$IP" -t raw -A PREROUTING -p udp -j DROP
 
-# Limit outgoing ICMP "Port Unreach" PPS to offload server in the case of UDP Flood.
+# Limit outgoing ICMP "Port-Unreach" PPS to offload server in the case of UDP Flood.
 # --------------------------------
  "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 6/m --limit-burst 2 -j ACCEPT
  "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -j DROP
@@ -161,12 +162,14 @@ clear
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type router-solicitation -j DROP
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type timestamp-request -j DROP
  "$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT
+ "$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:100 -j ACCEPT
  "$IP" -t raw -A PREROUTING -p icmp -j DROP
 
-# Block TCP packets with wrong flags to increase security and block simple attacks.
+# Block TCP packets with invalid tcp flags combination to increase security and block simple attacks.
 # ----------------------------------------------------------------
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK,FIN,RST RST -j DROP
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
@@ -195,7 +198,7 @@ clear
  "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 10 -j ACCEPT
  "$IP" -t raw -A PREROUTING -p udp -m multiport --sports 53,123,17185,7001,9000 -j DROP
 
-# Block invalid length of TCP/UDP packets to mitigate some attacks.
+# Block TCP/UDP packets with invalid length to mitigate some attacks.
 # --------------------------------
  "$IP" -t raw -I PREROUTING -p tcp -m length --length 0 -j DROP
  "$IP" -t raw -I PREROUTING -p udp -m length --length 0:8 -j DROP
@@ -211,12 +214,17 @@ clear
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -j DROP
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN FIN -j DROP
 
-# Protect SSH against very quick connection establishing.
+# Protect SSH against SYN Floods and SSH Killers.
 # --------------------------------
  "$IP" -t mangle -I PREROUTING -p tcp --dport "$SSH" -m state --state NEW -m recent --set
- "$IP" -t mangle -I PREROUTING -p tcp --dport "$SSH" -m state --state NEW -m recent --update --seconds 60 --hitcount 16 -j DROP
+ "$IP" -t mangle -I PREROUTING -p tcp --dport "$SSH" -m state --state NEW -m recent --update --seconds 60 --hitcount 14 -j DROP
 
-# Reject UDPs to SSH port to prevent UDP attacks on the SSH.
+# Protect webserver(s) against HTTP Flood & SYN Flood.
+# --------------------------------
+ "$IP" -t mangle -I PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --set
+ "$IP" -t mangle -I PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --update --seconds 60 --hitcount 55 -j DROP
+
+# Reject UDP packets sent to SSH port to prevent UDP attacks on the SSH.
 # --------------------------------
  "$IP" -t raw -A PREROUTING -p udp --dport "$SSH" -j "$USBA"
 
@@ -225,7 +233,7 @@ clear
 # --------------------------------
  "$IP" -I INPUT -p tcp -m multiport --dports "$SYNPROXY" -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
 
-# Drop UDP/TCP packets with invalid s-ports to prevent some attacks.
+# Drop UDP/TCP packets with invalid src-port to prevent some attacks.
 # --------------------------------
  "$IP" -t raw -I PREROUTING -p udp ! --sport 1:65535 -j DROP
  "$IP" -t raw -I PREROUTING -p tcp ! --sport 1:65535 -j DROP
@@ -234,7 +242,7 @@ clear
 # --------------------------------
  "$IP" -t raw -I PREROUTING -f -j DROP
 
-# Drop new TCP packets that arent SYNs to prevent popular TCP attacks.
+# Drop new not-SYN TCP Packets to block popular TCP attacks.
 # --------------------------------
  "$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
  "$IP" -t raw -I PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP
@@ -245,20 +253,19 @@ clear
 # --------------------------------
  "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:10000 -j DROP
 
-# Drop SYNs with s-port >1024 to prevent many attack types.
+# Drop SYNs with src-port <1024 to prevent many attack types.
 # --------------------------------
  "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -j DROP
 
 # Don't allow HTTP Requests with suspicious useragents to increase security.
 # --------------------------------
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'WordPress' --algo kmp -j "$UBA"
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'stresser' --algo kmp -j "$UBA"
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'benchmark' --algo kmp -j "$UBA"
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'MD5(' --algo kmp -j "$UBA"
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'censys' --algo kmp -j "$UBA"
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'inspect' --algo kmp -j "$UBA"
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'scaner' --algo kmp -j "$UBA"
- "$IP" -A INPUT -p tcp --dport "$HTTP" -m string --string 'shodan' --algo kmp -j "$UBA"
+ "$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'WordPress' --algo kmp -j "$UBA"
+ "$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'benchmark' --algo kmp -j "$UBA"
+ "$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'MD5(' --algo kmp -j "$UBA"
+ "$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'censys' --algo kmp -j "$UBA"
+ "$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'inspect' --algo kmp -j "$UBA"
+ "$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'scaner' --algo kmp -j "$UBA"
+ "$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'shodan' --algo kmp -j "$UBA"
 
 # Drop popular signature of SNMP-based attacks to mitigate them.
 # --------------------------------
@@ -272,9 +279,10 @@ clear
  "$IP" -t raw -A PREROUTING -p gre -j "$PBA"
  "$IP" -t raw -A PREROUTING -p ah -j "$PBA"
 
-# Drop all broadcasted packets to block fraggle/smurf attacks.
+# Drop all broadcasted/multicast packets to block fraggle/smurf attacks.
 # --------------------------------
- "$IP" -t raw -I PREROUTING -m pkttype --pkt-type broadcast -j DROP
+ "$IP" -t raw -A PREROUTING -m pkttype --pkt-type broadcast -j DROP
+ # "$IP" -t raw -A PREROUTING -m pkttype --pkt-type multicast -j DROP
 
 # Drop IPv4 packets with SSR option to block some spoof types.
 # --------------------------------
@@ -418,7 +426,7 @@ clear
  net.netfilter.nf_conntrack_tcp_timeout_syn_sent = 10
  net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 10
  net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 10
- net.netfilter.nf_conntrack_tcp_timeout_unacknowledged = 30
+ net.netfilter.nf_conntrack_tcp_timeout_unacknowledged = 20
  net.netfilter.nf_conntrack_generic_timeout = 120
  net.netfilter.nf_conntrack_udp_timeout = 10
  net.netfilter.nf_conntrack_icmp_timeout = 2
@@ -427,21 +435,13 @@ clear
 # Enable SYN-Cookies.
 # --------------------------------
  net.ipv4.tcp_syncookies = 1
- # Change value above to 2,
- # If you are under SYN DoS,
- # And if your server is slow.
- # Value '2' means that SYN-Cookies are always enabled.
 
-# Set minimal SYN/SYN-ACK retries count.
+# Set custom SYN/SYN-ACK retries count.
 # --------------------------------
  net.ipv4.tcp_synack_retries = 1
- net.ipv4.tcp_syn_retries = 1
+ net.ipv4.tcp_syn_retries = 2
 
-# Enable RFC 1337.
-# --------------------------------
- net.ipv4.tcp_rfc1337 = 1
-
-# Set large NIC buffers.
+# Set large NIC buffers size.
 # --------------------------------
  net.core.rmem_max = 33554432
  net.core.wmem_max = 33554432
@@ -498,11 +498,11 @@ clear
  kernel.kexec_load_disabled = 1
  #kernel.sysrq = 0 # Disables sysrq (not recommended)
  #net.ipv4.ip_forward = 0 # Disables ip_forward (may block VPN)
+ #net.ipv4.ip_no_pmtu_disc = 3 # Hardened PMTU Discover Mode (usually not needed)
 
 # Performance tuning.
 # --------------------------------
  kernel.sched_tunable_scaling = 1
- net.ipv4.tcp_moderate_rcvbuf = 1
  net.ipv4.tcp_slow_start_after_idle = 0
  kernel.shmmax = 268435456
  net.ipv4.tcp_tw_reuse = 1
@@ -534,7 +534,11 @@ clear
 
 # Set big CT table size.
 # --------------------------------
- net.netfilter.nf_conntrack_max = 10000000" > /etc/sysctl.conf
+ net.netfilter.nf_conntrack_max = 500000
+ 
+# Custom ratelimit for invalid TCP packets.
+# --------------------------------
+net.ipv4.tcp_invalid_ratelimit = 1000" > /etc/sysctl.conf
 
 sysctl -p
 systemctl enable --now netfilter-persistent

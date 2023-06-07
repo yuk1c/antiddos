@@ -37,33 +37,33 @@ HTTP="80"
 SYNPROXY="22,80,443"
 
 # Connection limit (per one IP)
-# Recommended: 100 connections
+# Recommended: 120 connections
 # If you server has only SSH,
 # And you're under TCP DDoS,
 # You can set here value ~50
-CL="100"
+CL="120"
 
 # Connection limit action
 # Recommended: REJECT with tcp-reset
 # Under DDoS you can set DROP here
 # To reduce the load on the CPU
-CLA="REJECT --reject-with tcp-reset"
+CLA="DROP"
 
 # UserAgent block action
-# Recommended: REJECT
+# Recommended: DROP
 # You should use WAF if you're under attack
 # Or if you're using HTTPS+HSTS
-UBA="REJECT --reject-with tcp-reset"
+UBA="DROP"
 
 # UDP to SSH Block action
 # Recommended: DROP
 USBA="DROP"
 
 # Proto block action
-# Recommended: ICMP proto unreach message
+# Recommended: DROP
 # Under DDoS (Layer3) you can try to change it
 # To DROP, it will reduce CPU Load
-PBA="REJECT --reject-with icmp-proto-unreach"
+PBA="DROP"
 
 # IP Block action
 # Recommended: DROP
@@ -122,6 +122,7 @@ cp /etc/sysctl.conf{,.backup}
 
 # Delete all rules to prevent some problems.
 nft flush ruleset
+nft add table filter
 clear
 
 # Set default policies to ACCEPT.
@@ -153,7 +154,7 @@ clear
 
 # Limit outgoing ICMP "Port-Unreach" PPS to offload server in the case of UDP Flood.
 # --------------------------------
- "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 6/m --limit-burst 2 -j ACCEPT
+ "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 7/m --limit-burst 2 -j ACCEPT
  "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -j DROP
 
 # Block some types of ICMP and limit all other types.
@@ -161,8 +162,8 @@ clear
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type address-mask-request -j DROP
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type router-solicitation -j DROP
  "$IP" -t raw -I PREROUTING -p icmp --icmp-type timestamp-request -j DROP
- "$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT
  "$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:100 -j ACCEPT
+ "$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s -j ACCEPT
  "$IP" -t raw -A PREROUTING -p icmp -j DROP
 
 # Block TCP packets with invalid tcp flags combination to increase security and block simple attacks.
@@ -222,7 +223,7 @@ clear
 # Protect webserver(s) against HTTP Flood & SYN Flood.
 # --------------------------------
  "$IP" -t mangle -I PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --set
- "$IP" -t mangle -I PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --update --seconds 60 --hitcount 55 -j DROP
+ "$IP" -t mangle -I PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --update --seconds 60 --hitcount 200 -j DROP
 
 # Reject UDP packets sent to SSH port to prevent UDP attacks on the SSH.
 # --------------------------------
@@ -331,8 +332,8 @@ clear
  "$IPS" add blacklist 167.94.145.0/24
  "$IPS" add blacklist 167.94.146.0/24
  "$IPS" add blacklist 167.248.133.0/24
- "$IPS" add blacklist 2602:80d:1000:b0cc:e::/80
- "$IPS" add blacklist 2620:96:e000:b0cc:e::/80
+ "$IPS" add blacklist 2602:80d:1000:b0cc:e::/32
+ "$IPS" add blacklist 2620:96:e000:b0cc:e::/32
  "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA"
 
 # Advanced rules
@@ -351,13 +352,11 @@ clear
  # --------------------------------
   "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "2&0xFFFF=0x2:0x0100" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
-  "$IP" -t raw -A PREROUTING -p tcp -syn -m length --length 52 u32 --u32 "12&0xFFFFFF00=0xc838" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m length --length 28 -m string --algo bm --string "0x0010" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m length --length 28 -m string --algo bm --string "0x0000" -j DROP
   "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0020" -j DROP
   "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -j DROP
   "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
-  "$IP" -t mangle -A PREROUTING -p tcp -syn -m length --length 52 -m string --algo bm --string "0xc838" -m state --state ESTABLISHED -j DROP
 
  # Block suspicious strings to mitigate impact of some attacks.
  # --------------------------------
@@ -373,8 +372,6 @@ clear
 
  # Block NTP Reflection packets.
  # --------------------------------
-  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8" -j DROP
-  "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF=42" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
 
  # Patch SYNOPT-ACK Method.
@@ -385,7 +382,6 @@ clear
  # --------------------------------
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|424f4f5445524e4554|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|41545441434b|" -j DROP
-  "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|504r574552|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|6c6e6f6172656162756e6386f6673b694464696573|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b6954|" -j DROP
   "$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b69646e6574|" -j DROP
@@ -418,6 +414,7 @@ clear
 
 
 # Set custom Netfilter CT timeouts.
+# Helps in TCP DDoS mitigation.
 # --------------------------------
  net.netfilter.nf_conntrack_tcp_timeout_last_ack = 10
  net.netfilter.nf_conntrack_tcp_timeout_close = 5
@@ -425,7 +422,7 @@ clear
  net.netfilter.nf_conntrack_tcp_timeout_time_wait = 5
  net.netfilter.nf_conntrack_tcp_timeout_syn_sent = 10
  net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 10
- net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 10
+ net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 25
  net.netfilter.nf_conntrack_tcp_timeout_unacknowledged = 20
  net.netfilter.nf_conntrack_generic_timeout = 120
  net.netfilter.nf_conntrack_udp_timeout = 10
@@ -433,15 +430,17 @@ clear
  net.netfilter.nf_conntrack_icmpv6_timeout = 3
 
 # Enable SYN-Cookies.
+# Helps in SYN Flood DDoS mitigation.
 # --------------------------------
  net.ipv4.tcp_syncookies = 1
 
 # Set custom SYN/SYN-ACK retries count.
+# Helps in TCP DDoS mitigation.
 # --------------------------------
  net.ipv4.tcp_synack_retries = 1
  net.ipv4.tcp_syn_retries = 2
 
-# Set large NIC buffers size.
+# Set custom NIC Buffers size.
 # --------------------------------
  net.core.rmem_max = 33554432
  net.core.wmem_max = 33554432
@@ -470,6 +469,8 @@ clear
  net.ipv6.conf.all.drop_unicast_in_l2_multicast = 1
  net.ipv6.conf.default.dad_transmits = 0
  net.ipv6.conf.default.autoconf = 0
+ #net.ipv4.ip_forward = 0 # Disables ip_forward (may block VPN/NAT)
+ #net.ipv4.ip_no_pmtu_disc = 3 # Hardened PMTU Discover Mode (usually not needed)
 
 # Prevent ARP Spoofing.
 # --------------------------------
@@ -485,7 +486,6 @@ clear
 # --------------------------------
  kernel.dmesg_restrict = 1
  kernel.kptr_restrict = 1
- kernel.nmi_watchdog = 0
  fs.protected_symlinks = 1
  fs.protected_hardlinks = 1
  fs.protected_fifos = 2
@@ -497,21 +497,21 @@ clear
  vm.unprivileged_userfaultfd = 0
  kernel.kexec_load_disabled = 1
  #kernel.sysrq = 0 # Disables sysrq (not recommended)
- #net.ipv4.ip_forward = 0 # Disables ip_forward (may block VPN)
- #net.ipv4.ip_no_pmtu_disc = 3 # Hardened PMTU Discover Mode (usually not needed)
 
 # Performance tuning.
 # --------------------------------
  kernel.sched_tunable_scaling = 1
- net.ipv4.tcp_slow_start_after_idle = 0
  kernel.shmmax = 268435456
  net.ipv4.tcp_tw_reuse = 1
+ vm.swappiness = 20
+ net.core.somaxconn = 16384
+ net.ipv4.tcp_keepalive_probes = 5
 
 # Enable ExecShield to block some remote attacks.
 # --------------------------------
  kernel.exec-shield = 2
 
-# Ignore ICMP Bogus responses.
+# Don't log bogus ICMP responses.
 # --------------------------------
  net.ipv4.icmp_ignore_bogus_error_responses = 1
 
@@ -528,13 +528,13 @@ clear
  net.netfilter.nf_conntrack_tcp_loose = 0
 
 # Reverse-path filter.
-# You should set '1' to '0' if you're using an assymetric routing.
+# You should set '1' to '2' if you're using an assymetric routing.
 # --------------------------------
  net.ipv4.conf.all.rp_filter = 1
 
 # Set big CT table size.
 # --------------------------------
- net.netfilter.nf_conntrack_max = 500000
+ net.netfilter.nf_conntrack_max = 800000
  
 # Custom ratelimit for invalid TCP packets.
 # --------------------------------
@@ -546,8 +546,11 @@ clear
 
 echo -e "${LightBlue}"
 echo -e "[✓] Script changes applied, but rules aren't saved.
-Check the network now, and if it fine - save the rules using 'sudo netfilter-persistent save'.\n"
+Check the network now, and if it's fine - save the rules using 'sudo netfilter-persistent save'.\n"
 echo -e "To get stats, you can use 'sudo nft list ruleset'."
+
+# Reset terminal color and exit.
+echo "tput sgr0"
 exit 0;
 
 # Wanna delete rule? Replace -A (or -I) with -D and apply!

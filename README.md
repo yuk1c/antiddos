@@ -39,3 +39,4 @@ sudo dmesg > dmesg.txt && sudo nft list ruleset > rules_stats.txt && sudo tcpdum
 - You use another antiDDoS script (uninstall it)
 - You use a modified kernel (install the official kernel)
 - You use complicated routing (don't use the script)
+  You use it on a router

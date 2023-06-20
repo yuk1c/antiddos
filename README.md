@@ -28,15 +28,24 @@ sudo dmesg > dmesg.txt && sudo nft list ruleset > rules_stats.txt && sudo tcpdum
 - As a temporary solution, you can set lower rate limits. It will help a bit.
 
 ## Script work on:
-- Ubuntu 20.04–22.04
+- Ubuntu 20.04–23.04
 
 ## SSH not working or server won't boot?
 - 1 - Restart your server and contact me via Telegram (@yuk1meow).
 - 2 - Replace current sysctl.conf file with backup sysctl, or load another kernel.
 
 ## Script may cause problems, if:
-- You use UFW or just DROP policy somewhere
 - You use another antiDDoS script (uninstall it)
 - You use a modified kernel (install the official kernel)
 - You use complicated routing (don't use the script)
   You use it on a router
+  
+## To allow needed ports:
+```
+sudo iptables-nft -A INPUT -p [tcp/udp] -m multiport --dports [port,port...] (max – 15 ports) -j ACCEPT
+```
+
+## To save rules:
+```
+sudo netfilter-persistent save
+```

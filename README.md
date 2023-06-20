@@ -5,7 +5,7 @@
 sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-persistent nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
-## Blocked attack types:
+## Blocked/patched attack types:
 - [x] TCP SYN Flood
 - [x] TCP ACK Flood
 - [x] TCP SYN-ACK Flood

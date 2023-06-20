@@ -5,10 +5,24 @@
 sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-persistent nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
-## Attack types blocked by script:
-- Many Layer3 attacks like GRE Flood
-- Many types of TCP Flood attacks
-- Popular types of UDP Flood attacks
+## Blocked attack types:
+- [x] TCP SYN Flood
+- [x] TCP ACK Flood
+- [x] TCP SYN-ACK Flood
+- [x] TCP RST Flood
+- [x] TCP FIN Flood
+- [x] Spoofed attacks
+- [x] UDP Flood
+- [x] ICMP Flood & PoD
+- [x] GREIP, ESP, Ah Flood
+- [x] Many sophiscated TCP attacks like SYNOPT-ACK
+- [x] HANDSHAKE & Slowloris attack
+- [x] Amplification (NTP/DNS)
+- [x] UDPMIX Method
+- [x] Simple HTTP Flood with high requests volume
+- [x] IP Fragmentation attacks
+- [x] SNMP-Based attacks
+- [x] Potential IPv6 attacks
 
 ## To quickly update the script:
 ```
@@ -38,12 +52,14 @@ sudo dmesg > dmesg.txt && sudo nft list ruleset > rules_stats.txt && sudo tcpdum
 - You use another antiDDoS script (uninstall it)
 - You use a modified kernel (install the official kernel)
 - You use complicated routing (don't use the script)
-  You use it on a router
+- You use it on a router
+- You use it with VPN
   
 ## To allow needed ports:
 ```
-sudo iptables-nft -A INPUT -p [tcp/udp] -m multiport --dports [port,port...] (max – 15 ports) -j ACCEPT
+sudo iptables-nft -I INPUT -p [tcp/udp] -m multiport --dports [port,port...] (max – 15 ports) -j ACCEPT
 ```
+Example: sudo iptables-nft -I INPUT -p tcp -m multiport --dports 1194 -j ACCEPT (will allow tcp to 1194)
 
 ## To save rules:
 ```

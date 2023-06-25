@@ -51,8 +51,8 @@ PBA="DROP"
 IBA="DROP"
 
 # SYN PPS limit (per IP)
-# Recommended: 6/s
-SPL="6/s"
+# Recommended: 5/s
+SPL="5/s"
 
 # ACK PPS limit (per IP)
 # Recommended: 2500/s
@@ -79,6 +79,7 @@ BRed="\033[1;31m"
 # RootCheck
 if [ "$(whoami)" != "root" ]; then
 	echo -e "${BRed}[!] Run this script as root."
+	tput sgr0
 	exit 255
 fi
 
@@ -97,18 +98,17 @@ cp /etc/sysctl.conf{,.backup}
 
 # --------------------------------
 
-# Set DROP policy for INPUT and FORWARD.
-# DROP policy is faster and provides more security.
+# Set input default policy to DROP.
+# Drop policy swiftly deals with any unwanted traffic.
 "$IP" -P INPUT DROP
-"$IP" -P FORWARD DROP
 
 # Allow the local interface.
 "$IP" -A INPUT -i lo -s 127.0.0.1 -j ACCEPT
 
-# ALlow established and related connections.
-"$IP" -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -m limit --limit 10/sec --limit-burst 15 -j ACCEPT
+# Allow established and related connections.
+"$IP" -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# Allow SSH (change the port if necessary).
+# Allow SSH.
 "$IP" -A INPUT -p tcp --dport "$SSH" -j ACCEPT
 
 # --------------------------------
@@ -116,20 +116,20 @@ cp /etc/sysctl.conf{,.backup}
 
 # Limit SYN/SYN-ACK/ACK/ACK-PSH PPS to mitigate SYN/SYN-ACK/ACK/ACK-PSH floods.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p tcp --syn --match hashlimit --hashlimit-above "$SPL" --hashlimit-mode srcip --hashlimit-name synflood -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK --match hashlimit --hashlimit-above "$APL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackflood -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK --match hashlimit --hashlimit-above "$SAPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name synackflood -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH --match hashlimit --hashlimit-above "$APPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackpshflood -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --syn --match hashlimit --hashlimit-above "$SPL" --hashlimit-mode srcip --hashlimit-name synflood -m comment --comment "SYN LIMIT" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK --match hashlimit --hashlimit-above "$APL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackflood -m comment --comment "ACK LIMIT"j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK --match hashlimit --hashlimit-above "$SAPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name synackflood -m comment --comment "SYNACK LIMIT"-j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH --match hashlimit --hashlimit-above "$APPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackpshflood -m comment --comment "ACKPSH LIMIT" -j DROP
 
 # Limit UDP PPS to mitigate UDP Floods.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p udp -m limit --limit "$UPL" -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp -j DROP
+"$IP" -t raw -A PREROUTING -p udp -m limit --limit "$UPL" -m comment --comment "UDP" -j ACCEPT
+"$IP" -t raw -A PREROUTING -p udp -m comment "UDP LIMIT" -j DROP
 
 # Block some types of ICMP and allow only limited ICMP.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:100 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 2 j ACCEPT
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:100 -m comment --comment "PING" -j ACCEPT
+"$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 2 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP
 "$IP" -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP
 "$IP" -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP
@@ -142,75 +142,83 @@ cp /etc/sysctl.conf{,.backup}
 
 # Block TCP packets with invalid tcp flags combination to increase security and block simple attacks.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST,PSH,URG RST,PSH,URG -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK,FIN,RST RST -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ALL -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST,PSH,URG RST,PSH,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -m comment --comment "INVALID TCP FLAGS" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ALL -m comment --comment "INVALID TCP FLAGS" -j DROP
 
 # Limit DNS/NTP PPS to offload CPU during AMP DDoS attacks with these protocols.
-# Additionally, block packets with specified source ports to reduce CPU load caused by simple attacks.
+# Additionally, drop some other protocols which could be used in amplified attacks.
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 3/m --limit-burst 1 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 4 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 53,123,17185,7001,9000,2140 -j DROP
+"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment "AMPLIFICATION" -j DROP
 
 # Drop TCP/UDP packets with invalid length to mitigate some attacks.
 # ----------------------------------------------------------------
-"$IP" -t raw -I PREROUTING -p tcp -m length --length 0 -j DROP
-"$IP" -t raw -I PREROUTING -p udp -m length --length 0:8 -j DROP
+"$IP" -t raw -A PREROUTING -p tcp -m length --length 0 -m comment --comment "INVALID LENGTH" -j DROP
+"$IP" -t raw -A PREROUTING -p udp -m length --length 0:8 -m comment --comment "INVALID LENGTH" -j DROP
 
 # Limit connections per IP to mitigate impact from Handshake and Slowloris.
 # ----------------------------------------------------------------
-"$IP" -t mangle -I PREROUTING -p tcp -m connlimit --connlimit-above "$CL" -j "$CLA"
+"$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" -m comment --comment "CONNECTION LIMIT" -j "$CLA"
 
 # Limit TCP FIN/RST packets per second (PPS) to mitigate some attacks.
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m limit --limit 2/s --limit-burst 2 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN FIN -m limit --limit 2/s --limit-burst 2 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN FIN -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m comment --comment "RST LIMIT" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN FIN -m comment --comment "FIN LIMIT" -j DROP
 
 # Protect webserver(s) against HTTP Flood & SYN Flood.
 # Note: Consider removing these rules if you're using a proxy/CDN.
 # --------------------------------
-"$IP" -t mangle -I PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --set
-"$IP" -t mangle -I PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --update --seconds 60 --hitcount 200 -j DROP
+"$IP" -t mangle -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --set
+"$IP" -t mangle -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --update --seconds 60 --hitcount 200 -m comment --comment "HTTP PROTECTION" -j DROP
 
 # Redirect suspicious packets to SYNPROXY.
 # Mitigates SYN Floods and some sophiscated TCP attacks.
 # --------------------------------
-"$IP" -I INPUT -p tcp -m multiport --dports "$SYNPROXY" -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
+"$IP" -t mangle -A INPUT -p tcp -m multiport --dports "$SYNPROXY" -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
 
-# Drop UDP/TCP packets with invalid src-port to prevent some attacks.
+# Drop all invalid packets.
+# Try it, if no problems - you can use it.
+# This rule gives you INSANE protection.
 # --------------------------------
-"$IP" -t raw -I PREROUTING -p udp ! --sport 1:65535 -j DROP
-"$IP" -t raw -I PREROUTING -p tcp ! --sport 1:65535 -j DROP
+# "$IP" -t mangle -I PREROUTING -p all -m state --state INVALID -m comment --comment "INVALID PACKET BLOCK" -j DROP
+
+# Drop UDP/TCP packets with invalid src-port to mitigate some attacks.
+# --------------------------------
+"$IP" -t raw -I PREROUTING -p udp ! --sport 1:65535 -m comment --comment "UDP INVALID SPORT" -j DROP
+"$IP" -t raw -I PREROUTING -p tcp ! --sport 1:65535 -m comment --comment "TCP INVALID SPORT" -j DROP
 
 # Drop SYNs with src-port <1024 to prevent many attack types.
 # --------------------------------
-"$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -j DROP
+"$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN INVALID SPORT" -j DROP
 
-# Drop fragmented packets to prevent IP fragmentation attacks.
+# Drop fragmented packets to mitigate IP fragmentation attacks.
+# If you need fragmented packets, you can drop only invalid:
+# iptables -t raw -I PREROUTING -m frag --fragfirst -m comment --comment "MALFORMED FRAG DROP" -j DROP
 # --------------------------------
-"$IP" -t raw -I PREROUTING -f -j DROP
+"$IP" -t raw -I PREROUTING -f -m comment --comment "FRAG DROP" -j DROP
 
-# Drop new not-SYN TCP Packets to block popular TCP attacks.
+# Drop new not-SYN TCP Packets to mitigate popular TCP attacks.
 # --------------------------------
-"$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -j DROP
+"$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "NEW TCP NOT SYN DROP" -j DROP
 
 # Drop TCPs with invalid MSS to mitigate some attack types.
 # --------------------------------
-"$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:63000 -j DROP
+"$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:63000 -m comment --comment "INVALID MSS" -j DROP
 
 # Drop HTTP Requests with suspicious useragents to increase security.
 # --------------------------------
@@ -224,8 +232,7 @@ cp /etc/sysctl.conf{,.backup}
 
 # Drop popular signature of SNMP-based attacks to mitigate them.
 # --------------------------------
-"$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536 -j DROP
-"$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 1244 -j DROP
+"$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
 
 # Block some Layer3 Protocols to mitigate ESP/GRE/Ah floods.
 # If you need these protocols - delete rules below.
@@ -248,7 +255,7 @@ cp /etc/sysctl.conf{,.backup}
 # ----------------------------------------------------------------
 "$IP6" -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT
 "$IP6" -t raw -A PREROUTING -p icmpv6 -j DROP
-"$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 10/s --limit-burst 10 -j ACCEPT
+"$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 10/s --limit-burst 4 -j ACCEPT
 "$IP6" -t raw -A PREROUTING -p tcp --syn -j DROP
 
 # Block some multicast IPs, censys IPs, shodan IPs...
@@ -300,8 +307,8 @@ cp /etc/sysctl.conf{,.backup}
 
 # Patch UDPMIX method.
 # --------------------------------
-"$IP" -A INPUT -p udp --dport 27043 -m state --state NEW -m recent --set
-"$IP" -A INPUT -p udp --dport 27043 -m state --state NEW -m recent --update --seconds 1 --hitcount 2 -j DROP
+"$IP" -t mangle -A PREROUTING -p udp --dport 27043 -m state --state NEW -m recent --set
+"$IP" -t mangle -A PREROUTING -p udp --dport 27043 -m state --state NEW -m recent --update --seconds 1 --hitcount 2 -j DROP
 
 # Patch "Stacheldraht" malware.
 # --------------------------------
@@ -318,14 +325,10 @@ cp /etc/sysctl.conf{,.backup}
 "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -m state --state ESTABLISHED -j DROP
 "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x38d3" -m state --state ESTABLISHED -j DROP
 
-# Block signatures of some popular CNC software.
+# Block signatures of some popular C2 sources.
 # --------------------------------
 "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "2&0xFFFF=0x2:0x0100" -j DROP
 "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m length --length 28 -m string --algo bm --string "0x0010" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m length --length 28 -m string --algo bm --string "0x0000" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0020" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -j DROP
 "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
 
 # Block suspicious strings to mitigate impact of some attacks.
@@ -348,13 +351,8 @@ cp /etc/sysctl.conf{,.backup}
 # --------------------------------
 "$IP" -t raw -A PREROUTING -p tcp --sport 21 --dport 21 --tcp-flags SYN,ACK SYN,ACK -j DROP
 
-# Block some exposed bypass payloads.
+# Block known bypasses by their patterns.
 # --------------------------------
-"$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|424f4f5445524e4554|" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|41545441434b|" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|6c6e6f6172656162756e6386f6673b694464696573|" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b6954|" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m string --algo bm --hex-string "|736b69646e6574|" -j DROP
 "$IP" -t raw -A PREROUTING -p udp -m multiport --dports 16000:29000,"$SSH" -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
 "$IP" -t raw -A PREROUTING -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
 "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
@@ -364,7 +362,7 @@ cp /etc/sysctl.conf{,.backup}
 "$IP" -t raw -A PREROUTING -m string --algo bm --from 28 --to 29 --string "farewell" -j DROP
 "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|53414d50|" --algo kmp --from 28 --to 29 -j DROP
 
-# If you've added port allowing rules
+# If you've added port-allowing rules
 # Into the script, you can uncomment two rules below
 # To enable logging to dmesg.
 # This logging is ratelimited to 5 msg per second.
@@ -395,11 +393,11 @@ echo -e "
  net.netfilter.nf_conntrack_tcp_timeout_close = 5
  net.netfilter.nf_conntrack_tcp_timeout_close_wait = 5
  net.netfilter.nf_conntrack_tcp_timeout_time_wait = 5
- net.netfilter.nf_conntrack_tcp_timeout_syn_sent = 10
- net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 10
+ net.netfilter.nf_conntrack_tcp_timeout_syn_sent = 20
+ net.netfilter.nf_conntrack_tcp_timeout_syn_recv = 20
  net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 25
  net.netfilter.nf_conntrack_tcp_timeout_unacknowledged = 20
- net.netfilter.nf_conntrack_generic_timeout = 120
+ net.netfilter.nf_conntrack_generic_timeout = 300
  net.netfilter.nf_conntrack_udp_timeout = 10
  net.netfilter.nf_conntrack_icmp_timeout = 2
  net.netfilter.nf_conntrack_icmpv6_timeout = 3
@@ -424,7 +422,7 @@ echo -e "
 # --------------------------------
  net.ipv4.tcp_mtu_probing = 1
 
-# Set a large route table size (IPv4 & IPv6).
+# Set a large route table size (for IPv4 & IPv6).
 # --------------------------------
  net.ipv6.route.max_size = 2147483647
  net.ipv4.route.max_size = 2147483647
@@ -444,7 +442,7 @@ echo -e "
  net.ipv6.conf.all.drop_unicast_in_l2_multicast = 1
  net.ipv6.conf.default.dad_transmits = 0
  net.ipv6.conf.default.autoconf = 0
- net.ipv4.ip_forward = 0 # Disables ip_forward (blocks VPN/NAT, set to 1 to fix)
+ #net.ipv4.ip_forward = 0 # Disables ip_forward (blocks VPN/NAT)
  #net.ipv4.ip_no_pmtu_disc = 3 # Hardened PMTU Discover Mode (usually not needed)
 
 # Prevent ARP Spoofing.
@@ -469,18 +467,28 @@ echo -e "
  kernel.unprivileged_userns_clone = 0
  kernel.printk = 3 3 3 3
  net.core.bpf_jit_harden = 2
+ net.netfilter.nf_conntrack_helper = 0
  vm.unprivileged_userfaultfd = 0
  kernel.kexec_load_disabled = 1
  #kernel.sysrq = 0 # Disables sysrq (not recommended)
 
 # Performance tuning.
+# Set somaxconn to 2000000 if you have very powerful server.
+# Your server will be able to handle 2 mil connections. 0_0
+# Disabled checksum verification in NF because the NIC usually already calculates checksums.
 # --------------------------------
  kernel.sched_tunable_scaling = 1
  kernel.shmmax = 268435456
  net.ipv4.tcp_tw_reuse = 1
  vm.swappiness = 20
- net.core.somaxconn = 16384
+ net.core.somaxconn = 32000
  net.ipv4.tcp_keepalive_probes = 5
+ net.netfilter.nf_conntrack_checksum = 0
+
+# Set max conntrack table size.
+# --------------------------------
+ net.nf_conntrack_max = 20971520
+ net.netfilter.nf_conntrack_max = 20971520
 
 # Enable ExecShield to block some remote attacks.
 # --------------------------------
@@ -498,7 +506,7 @@ echo -e "
 # --------------------------------
  net.ipv4.ip_local_port_range=1024 65535
 
-# Disable conntrack TCP Loose (we need this to enable SYN Proxy).
+# Disable conntrack TCP Loose (we need this to use SYN Proxy).
 # --------------------------------
  net.netfilter.nf_conntrack_tcp_loose = 0
 
@@ -506,10 +514,6 @@ echo -e "
 # You should set '1' to '2' if you're using an assymetric routing.
 # --------------------------------
  net.ipv4.conf.all.rp_filter = 1
-
-# Set big CT table size.
-# --------------------------------
- net.netfilter.nf_conntrack_max = 800000
 
 # Custom ratelimit for invalid TCP packets.
 # --------------------------------
@@ -526,6 +530,7 @@ Check the network now, and if it's fine - save the rules using 'sudo netfilter-p
 echo -e "\nDrop policy blocks everything that isnt allowed."
 echo -e "Allow needed TCP port with 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'"
 echo -e "For UDP port you can use 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'"
+echo -e "Also you can check stats: 'iptables-nft -L -n -v'"
 
 # Reset terminal color and exit.
 tput sgr0

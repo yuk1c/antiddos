@@ -117,14 +117,14 @@ cp /etc/sysctl.conf{,.backup}
 # Limit SYN/SYN-ACK/ACK/ACK-PSH PPS to mitigate SYN/SYN-ACK/ACK/ACK-PSH floods.
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p tcp --syn --match hashlimit --hashlimit-above "$SPL" --hashlimit-mode srcip --hashlimit-name synflood -m comment --comment "SYN LIMIT" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK --match hashlimit --hashlimit-above "$APL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackflood -m comment --comment "ACK LIMIT"j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK --match hashlimit --hashlimit-above "$SAPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name synackflood -m comment --comment "SYNACK LIMIT"-j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK --match hashlimit --hashlimit-above "$APL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackflood -m comment --comment "ACK LIMIT" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK --match hashlimit --hashlimit-above "$SAPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name synackflood -m comment --comment "SYNACK LIMIT" -j DROP
 "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH --match hashlimit --hashlimit-above "$APPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackpshflood -m comment --comment "ACKPSH LIMIT" -j DROP
 
 # Limit UDP PPS to mitigate UDP Floods.
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p udp -m limit --limit "$UPL" -m comment --comment "UDP" -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp -m comment "UDP LIMIT" -j DROP
+"$IP" -t raw -A PREROUTING -p udp -m comment --comment "UDP LIMIT" -j DROP
 
 # Block some types of ICMP and allow only limited ICMP.
 # ----------------------------------------------------------------
@@ -162,7 +162,7 @@ cp /etc/sysctl.conf{,.backup}
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 3/m --limit-burst 1 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 4 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment "AMPLIFICATION" -j DROP
+"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment --comment "AMPLIFICATION" -j DROP
 
 # Drop TCP/UDP packets with invalid length to mitigate some attacks.
 # ----------------------------------------------------------------

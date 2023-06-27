@@ -15,7 +15,7 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-pe
 - [x] UDP Flood
 - [x] ICMP Flood & PoD
 - [x] GREIP, ESP, Ah Flood
-- [x] Many sophiscated TCP attacks like SYNOPT-ACK
+- [x] Many sophisticated TCP attacks like SYNOPT-ACK
 - [x] HANDSHAKE & Slowloris attack
 - [x] Amplification (NTP/DNS)
 - [x] UDPMIX Method
@@ -35,7 +35,7 @@ sudo dmesg > dmesg.txt && sudo nft list ruleset > rules_stats.txt && sudo tcpdum
 ```
 – Then send these files to @yuk1meow (telegram).
 
-– Finally, attack will be patched, if it possible.
+– Finally, the attack will be patched, if possible.
 
 ## You're under volumetric DDoS?
 - You should buy a protected server because this DDoS Attack type can't be blocked normally on the server side.
@@ -65,3 +65,7 @@ Example: sudo iptables-nft -I INPUT -p tcp -m multiport --dports 1194 -j ACCEPT 
 ```
 sudo netfilter-persistent save
 ```
+
+## Slow TCP Download speed?
+Then try to increase the limit for ACK packets.
+

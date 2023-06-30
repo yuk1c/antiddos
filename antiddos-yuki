@@ -24,9 +24,6 @@ SSH="22"
 # Default: 80
 HTTP="80"
 
-# Ports protected by SYNPROXY.
-SYNPROXY="22,80,443"
-
 # Connection limit (per one IP)
 # Recommended: 100 connections
 CL="100"
@@ -172,7 +169,7 @@ cp /etc/sysctl.conf{,.backup}
 # Also, drop certain other protocols that could be exploited in amplified attacks.
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 3/m --limit-burst 1 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 4/s --limit-burst 4 -j ACCEPT
+"$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 70/m --limit-burst 4 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment --comment "AMPLIFICATION" -j DROP
 
 # Discard TCP/UDP packets with invalid length to counter certain attacks.
@@ -180,84 +177,54 @@ cp /etc/sysctl.conf{,.backup}
 "$IP" -t raw -A PREROUTING -p tcp -m length --length 0 -m comment --comment "INVALID LENGTH" -j DROP
 "$IP" -t raw -A PREROUTING -p udp -m length --length 0:8 -m comment --comment "INVALID LENGTH" -j DROP
 
+# Drop all invalid packets.
+# ----------------------------------------------------------------
+"$IP" -t mangle -I PREROUTING -p all -m state --state INVALID -m comment --comment "INVALID PACKET BLOCK" -j DROP
+
 # Restrict the number of connections per IP to mitigate the impact of Handshake and Slowloris attacks.
 # ----------------------------------------------------------------
 "$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" -m comment --comment "CONNECTION LIMIT" -j "$CLA"
 
 # Protect webserver(s) against HTTP Flood & SYN Flood.
 # Note: Consider removing these rules if you're using a proxy/CDN.
-# --------------------------------
+# ----------------------------------------------------------------
 "$IP" -t mangle -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --set
 "$IP" -t mangle -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --update --seconds 60 --hitcount 200 -m comment --comment "HTTP PROTECTION" -j DROP
 
-# Redirect suspicious packets to SYNPROXY to counter SYN Floods and certain sophisticated TCP attacks.
-# --------------------------------
-"$IP" -t mangle -A INPUT -p tcp -m multiport --dports "$SYNPROXY" -m conntrack --ctstate INVALID,UNTRACKED -j SYNPROXY --timestamp --sack-perm
-
-# Safeguard against attacks by dropping UDP/TCP packets with invalid source ports.
-# --------------------------------
-"$IP" -t raw -I PREROUTING -p udp ! --sport 1:65535 -m comment --comment "UDP INVALID SPORT" -j DROP
-"$IP" -t raw -I PREROUTING -p tcp ! --sport 1:65535 -m comment --comment "TCP INVALID SPORT" -j DROP
-
 # Drop SYNs with src-port <1024 to prevent many attack types.
-# --------------------------------
+# ----------------------------------------------------------------
 "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN INVALID SPORT" -j DROP
 
-# Drop incorrectly fragmented packets to prevent IP fragmentation attacks.
-# You can block all fragmented packets using this:
-# "$IP" -t raw -I PREROUTING -f -m comment --comment "FRAG DROP" -j DROP
-# --------------------------------
-"$IP" -t raw -I PREROUTING -m frag --fragfirst -m comment --comment "MALFORMED FRAG DROP" -j DROP
-
 # Drop new non-SYN TCP packets to mitigate common TCP attacks.
-# --------------------------------
+# ----------------------------------------------------------------
 "$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "NEW TCP NOT SYN DROP" -j DROP
 
 # Drop TCP packets with invalid MSS to mitigate certain attack types.
-# --------------------------------
+# ----------------------------------------------------------------
 "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:63000 -m comment --comment "INVALID MSS" -j DROP
-
-# Enhance security by dropping HTTP requests with suspicious user agents.
-# --------------------------------
-"$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'python-requests' --algo kmp -j "$UBA"
-"$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'benchmark' --algo kmp -j "$UBA"
-"$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'MD5(' --algo kmp -j "$UBA"
-"$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'censys' --algo kmp -j "$UBA"
-"$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'inspect' --algo kmp -j "$UBA"
-"$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'scanner' --algo kmp -j "$UBA"
-"$IP" -A INPUT -p tcp -m multiport --dports "$HTTP" -m string --string 'shodan' --algo kmp -j "$UBA"
-
-# Drop packets with popular SNMP-based attack signatures to mitigate SNMP attacks.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
 
 # Block specific Layer 3 protocols (ESP, GRE, AH, IGMP) to mitigate floods.
 # Remove the rules if you require these protocols.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p esp -j "$PBA"
-"$IP" -t raw -A PREROUTING -p gre -j "$PBA"
-"$IP" -t raw -A PREROUTING -p ah -j "$PBA"
-"$IP" -t raw -A PREROUTING -p igmp -j "$PBA"
-
-# Drop IPv4 packets with the SSR option to block certain types of spoofing.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -m ipv4options --ssrr -j DROP
-"$IP" -t raw -A PREROUTING -m hl --hl-eq 1 -j DROP
+# ----------------------------------------------------------------
+"$IP" -t raw -I PREROUTING -p esp -j "$PBA"
+"$IP" -t raw -I PREROUTING -p gre -j "$PBA"
+"$IP" -t raw -I PREROUTING -p ah -j "$PBA"
+"$IP" -t raw -I PREROUTING -p igmp -j "$PBA"
 
 # Improve security by dropping packets received on TEST-NET IP addresses.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p all -s 192.0.2.0/24 -j DROP
+# ----------------------------------------------------------------
+"$IP" -t raw -A PREROUTING -p all -d 192.0.2.0/24 -j DROP
 
 # Limit SYN/ICMPv6 packets per second (PPS) to mitigate certain IPv6 attacks, although they are not currently common.
 # ----------------------------------------------------------------
-"$IP6" -t raw -A PREROUTING -p icmpv6 -m limit --limit 4/s -j ACCEPT
+"$IP6" -t raw -A PREROUTING -p icmpv6 -m limit --limit 3/s -j ACCEPT
 "$IP6" -t raw -A PREROUTING -p icmpv6 -j DROP
-"$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 10/s --limit-burst 4 -j ACCEPT
+"$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 7/s --limit-burst 4 -j ACCEPT
 "$IP6" -t raw -A PREROUTING -p tcp --syn -j DROP
 
 # Block some multicast IPs, censys IPs, shodan IPs...
 # We use big hashsize, so it doesn't affects performance.
-# --------------------------------
+# ----------------------------------------------------------------
 "$IPS" create blacklist nethash hashsize 260000
 "$IPS" add blacklist 240.0.0.0/4
 "$IPS" add blacklsit 224.0.0.0/4
@@ -282,8 +249,6 @@ cp /etc/sysctl.conf{,.backup}
 "$IPS" add blacklist 198.20.87.98
 "$IPS" add blacklist 185.163.109.66
 "$IPS" add blacklist 94.102.49.0/24
-"$IPS" add blacklist 104.131.0.69
-"$IPS" add blacklist 104.236.198.48
 "$IPS" add blacklist 155.94.222.0/24
 "$IPS" add blacklist 155.94.254.0/24
 "$IPS" add blacklist 162.142.125.0/24
@@ -301,11 +266,6 @@ cp /etc/sysctl.conf{,.backup}
 "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA"
 
 # Advanced FireWall ruleset.
-# Useful on routers.
-
-# Patch random rare attack.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p udp -m length --length 100:140 -m string --string "nAFS" --algo kmp --to 65535 -j DROP
 
 # Patch "Stacheldraht" malware.
 # --------------------------------
@@ -315,19 +275,6 @@ cp /etc/sysctl.conf{,.backup}
 # --------------------------------
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
 
-# To enhance security, block certain exposed payloads from being processed or transmitted.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0xd3da" -m state --state ESTABLISHED -j DROP
-"$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
-"$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -m state --state ESTABLISHED -j DROP
-"$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x38d3" -m state --state ESTABLISHED -j DROP
-
-# Enhance security by blocking signatures of popular Command and Control (C2) sources.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "2&0xFFFF=0x2:0x0100" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
-
 # To mitigate the impact of certain attacks, block suspicious strings from being processed or transmitted.
 # --------------------------------
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
@@ -335,39 +282,7 @@ cp /etc/sysctl.conf{,.backup}
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP
 
-# To enhance security, block exposed payloads of the NULL method.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "0x000000000001" -j DROP
-
-# Patch SYNOPT-ACK Attack.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p tcp --sport 21 --dport 21 --tcp-flags SYN,ACK SYN,ACK -j DROP
-
-# Prevent NTP Reflection attacks by blocking incoming NTP Reflection packets.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
-
-# Patch UDPMIX method.
-# --------------------------------
-"$IP" -t mangle -A PREROUTING -p udp --dport 27043 -m state --state NEW -m recent --set
-"$IP" -t mangle -A PREROUTING -p udp --dport 27043 -m state --state NEW -m recent --update --seconds 1 --hitcount 2 -j DROP
-
-# Enhance security by blocking known bypasses based on their specific patterns.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p udp -m multiport --dports 16000:29000,"$SSH" -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
-"$IP" -t raw -A PREROUTING -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "6&0xFF=0,2:5,7:16,18:255" -j DROP
-"$IP" -t raw -A PREROUTING -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP
-"$IP" -t raw -A PREROUTING -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP
-"$IP" -t raw -A PREROUTING -m string --algo bm --from 28 --to 29 --string "farewell" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|53414d50|" --algo kmp --from 28 --to 29 -j DROP
-
-# Additional BETA rules.
-
-# Drop all invalid packets. If there are no issues, you can use this rule for excellent protection.
-# "$IP" -t mangle -I PREROUTING -p all -m state --state INVALID -m comment --comment "INVALID PACKET BLOCK" -j DROP
+# Additional beta rules.
 
 # Better protection for HTTPS/HTTP server(s):
 # "$IP" -A INPUT -p tcp --dport 80 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
@@ -395,7 +310,8 @@ cp /etc/sysctl.conf{,.backup}
 # Block FTP SITE EXEC Command:
 # "$IP" -A INPUT -p tcp --dport 21 -m string --string "SITE EXEC" --algo bm -j DROP
 
-# Block SQLi attemps;
+# Block SQLi attemps
+# If your website under cloudflare you should change 3306 to HTTPS or HTTP.
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "union select" --algo bm -j DROP
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "information_schema" --algo bm -j DROP
 
@@ -419,7 +335,7 @@ cp /etc/sysctl.conf{,.backup}
 # "$IP" -t raw -A PREROUTING -m state --state NEW -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s -j ACCEPT
 # "$IP" -t raw -A PREROUTING -m state --state NEW -p tcp --tcp-flags SYN,ACK,FIN,RST RST -j DROP
 
-# Geo blocking (in this rule, we block China for example):
+# Geo blocking (in this rule, we block China, for example):
 # "$IP" -t raw -I PREROUTING -m geoip --src-cc CN -j DROP
 
 # Patch random attack, lol.
@@ -428,6 +344,60 @@ cp /etc/sysctl.conf{,.backup}
 # SYNACK Reflection block.
 # "$IP" -A INPUT -p tcp --syn -m recent --name blacklist --set -j DROP
 # "$IP" -A INPUT -p tcp --tcp-flags ALL SYN,ACK -m recent --name blacklist --rcheck --seconds 60 --hitcount 10 -j DROP
+
+# Advanced IP spoofing blocking.
+# "$IP" -t raw -A PREROUTING -m ipv4options --ssrr -j DROP
+# "$IP" -t raw -A PREROUTING -m hl --hl-eq 1 -j DROP
+
+# Patch random rare attack.
+# "$IP" -t raw -A PREROUTING -p udp -m length --length 100:140 -m string --string "nAFS" --algo kmp --to 65535 -j DROP
+
+# Prevent NTP Reflection attacks by blocking incoming NTP Reflection packets.
+# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
+
+# Enhance security by blocking known bypasses based on their specific patterns.
+# "$IP" -t raw -A PREROUTING -p udp -m multiport --dports 16000:29000,"$SSH" -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
+# "$IP" -t raw -A PREROUTING -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
+# "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
+# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "6&0xFF=0,2:5,7:16,18:255" -j DROP
+# "$IP" -t raw -A PREROUTING -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP
+# "$IP" -t raw -A PREROUTING -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP
+# "$IP" -t raw -A PREROUTING -m string --algo bm --from 28 --to 29 --string "farewell" -j DROP
+# "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|53414d50|" --algo kmp --from 28 --to 29 -j DROP
+
+# Enhance security by blocking signatures of popular Command and Control (C2) sources.
+# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "2&0xFFFF=0x2:0x0100" -j DROP
+# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
+
+# To enhance security, block one of all exposed payloads of the IP-NULL method.
+# --------------------------------
+# "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
+
+# Patch SYNOPT-ACK Attack.
+# --------------------------------
+# "$IP" -t raw -A PREROUTING -p tcp --sport 21 --dport 21 --tcp-flags SYN,ACK SYN,ACK -j DROP
+
+# To enhance security, block certain exposed payloads from being processed or transmitted.
+# --------------------------------
+# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0xd3da" -m state --state ESTABLISHED -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -m state --state ESTABLISHED -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x38d3" -m state --state ESTABLISHED -j DROP
+
+# Enhance security by dropping HTTP requests with suspicious user agents.
+# --------------------------------
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'python-requests' --algo kmp -j "$UBA"
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'benchmark' --algo kmp -j "$UBA"
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'MD5(' --algo kmp -j "$UBA"
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'censys' --algo kmp -j "$UBA"
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'inspect' --algo kmp -j "$UBA"
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'scanner' --algo kmp -j "$UBA"
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'shodan' --algo kmp -j "$UBA"
+
+# Drop packets with popular SNMP-based attack signatures to mitigate SNMP attacks.
+# --------------------------------
+# "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
 
 # --------------------------------
 

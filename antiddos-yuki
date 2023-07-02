@@ -4,81 +4,6 @@
 # For best results, install fail2ban and any IPS.
 # Enjoy! Made by yuki with love <3.
 
-# ------------------------
-# Configuration
-# ------------------------
-
-# ipt-nft, ip6t-nft, ipset, nft
-IP="/sbin/iptables-nft"
-IP6="/sbin/ip6tables-nft"
-IPS="/sbin/ipset"
-NFT="/sbin/nft"
-
-# SSH Port.
-# Ignore this if you don't use SSH.
-# Default: 22 (ssh)
-SSH="22"
-
-# All ports of running webservers.
-# Ignore this if you don't have them.
-# Default: 80
-HTTP="80"
-
-# Connection limit (per one IP)
-# Recommended: 100 connections
-CL="100"
-
-# Connection limit action
-# Recommended: DROP
-CLA="DROP"
-
-# UserAgent block action
-# Recommended: DROP
-# You should use WAF if you're under attack
-# Or if you're using HTTPS+HSTS
-UBA="DROP"
-
-# Proto block action
-# Recommended: DROP
-PBA="DROP"
-
-# IP Block action
-# Recommended: DROP
-# No need to change it without reason.
-IBA="DROP"
-
-# SYN PPS limit (per IP)
-# Recommended: 5/s
-SPL="5/s"
-
-# ACK PPS limit (per IP)
-# Recommended: 4900/s
-APL="4900/s"
-
-# SYN-ACK PPS limit (per IP)
-# Recommended: 5/s
-SAPL="5/s"
-
-# ACK-PSH PPS limit (per IP)
-# Recommended: 1000/s
-APPL="1000/s"
-
-# RST PPS limit (per IP)
-# Recommended: 2/s
-RPL="2/s"
-
-# FIN PPS limit (per IP)
-# Recommended: 2/s
-FPL="2/s"
-
-# UDP PPS limit (per IP)
-# Recommended: 3000/s
-UPL="3000/s"
-
-# Color
-BYellow="\033[1;33m"
-BRed="\033[1;31m"
-
 # --------------------------------
 
 # RootCheck
@@ -89,6 +14,8 @@ if [ "$(whoami)" != "root" ]; then
 fi
 
 # --------------------------------
+
+. config.sh
 
 # Flush all rules.
 "$NFT" flush ruleset
@@ -121,26 +48,26 @@ cp /etc/sysctl.conf{,.backup}
 
 # To mitigate SYN/SYN-ACK/ACK/ACK-PSH/RST/FIN floods, restrict the number of SYN/SYN-ACK/ACK/ACK-PSH/RST/FIN packets per second (PPS).
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p tcp --syn --match hashlimit --hashlimit-above "$SPL" --hashlimit-mode srcip --hashlimit-name synflood -m comment --comment "SYN LIMIT" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK --match hashlimit --hashlimit-above "$APL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackflood -m comment --comment "ACK LIMIT" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK --match hashlimit --hashlimit-above "$SAPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name synackflood -m comment --comment "SYNACK LIMIT" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH --match hashlimit --hashlimit-above "$APPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name ackpshflood -m comment --comment "ACKPSH LIMIT" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST --match hashlimit --hashlimit-above "$RPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name rstflood -m comment --comment "RST LIMIT" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN FIN --match hashlimit --hashlimit-above "$FPL" --hashlimit-mode srcip --hashlimit-burst 2 --hashlimit-name finflood -m comment --comment "FIN LIMIT" -j DROP
+mitigate_tcp_flood "--syn" "$SPL" 5 "synflood" "SYN LIMIT"
+mitigate_tcp_flood "--tcp-flags ACK ACK" "$APL" 2 "ackflood" "ACK LIMIT"
+mitigate_tcp_flood "--tcp-flags SYN,ACK SYN,ACK" "$SAPL" 2 "synackflood" "SYNACK LIMIT"
+mitigate_tcp_flood "--tcp-flags ACK,PSH ACK,PSH" "$APPL" 2 "ackpshflood" "ACKPSH LIMIT"
+mitigate_tcp_flood "--tcp-flags RST RST" "$RPL" 2 "rstflood" "RST LIMIT"
+mitigate_tcp_flood "--tcp-flags FIN FIN" "$FPL" 2 "finflood" "FIN LIMIT"
 
 # Mitigate UDP Floods by limiting the number of UDP packets per second (PPS).
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p udp -m limit --limit "$UPL" -m comment --comment "UDP" -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp -m comment --comment "UDP LIMIT" -j DROP
+mitigate_udp_flood "-m limit --limit $UPL" "UDP" "ACCEPT"
+mitigate_udp_flood "" "UDP LIMIT" "DROP"
 
 # Allow limited ICMP traffic while blocking specific types of ICMP for improved security.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:64 -m comment --comment "PING" -j ACCEPT
-"$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 2 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP
-"$IP" -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP
-"$IP" -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP
-"$IP" -t raw -A PREROUTING -p icmp --icmp-type redirect -j DROP
+icmp_block "echo-request" '-m length --length 1:64 -m comment --comment "PING"' "ACCEPT"
+icmp_block "" "-m limit --limit 2/s --limit-burst 2" "ACCEPT"
+icmp_block "address-mask-request" "" "DROP"
+icmp_block "router-solicitation" "" "DROP"
+icmp_block "timestamp-request" "" "DROP"
+icmp_block "redirect" "" "DROP"
 
 # To relieve server load during UDP Floods, restrict the outgoing ICMP 'Port-Unreach' packets per second (PPS).
 # ----------------------------------------------------------------
@@ -149,21 +76,21 @@ cp /etc/sysctl.conf{,.backup}
 
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK,FIN,PSH SYN,ACK,FIN,PSH -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,RST,ACK,FIN,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST,PSH,URG RST,PSH,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL SYN,FIN,PSH,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL FIN,PSH,URG -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,RST FIN,RST -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,FIN SYN,FIN -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -m comment --comment "INVALID TCP FLAGS" -j DROP
-"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ALL -m comment --comment "INVALID TCP FLAGS" -j DROP
+tcp_filter "SYN,ACK,FIN,PSH SYN,ACK,FIN,PSH"
+tcp_filter "ALL SYN,RST,ACK,FIN,URG" 
+tcp_filter "RST,PSH,URG RST,PSH,URG"
+tcp_filter "ALL SYN,FIN,PSH,URG"
+tcp_filter "SYN,ACK,FIN,RST RST"
+tcp_filter "ALL FIN,PSH,URG"
+tcp_filter "FIN,RST FIN,RST"
+tcp_filter "SYN,FIN SYN,FIN"
+tcp_filter "SYN,RST SYN,RST"
+tcp_filter "FIN,ACK FIN"
+tcp_filter "ACK,URG URG"
+tcp_filter "ACK,FIN FIN"
+tcp_filter "ACK,PSH PSH"
+tcp_filter "ALL NONE"
+tcp_filter "ALL ALL"
 
 # Safeguard against CPU overload during AMP DDoS attacks by limiting DNS/NTP packets per second (PPS).
 # Also, drop certain other protocols that could be exploited in amplified attacks.
@@ -226,43 +153,10 @@ cp /etc/sysctl.conf{,.backup}
 # We use big hashsize, so it doesn't affects performance.
 # ----------------------------------------------------------------
 "$IPS" create blacklist nethash hashsize 260000
-"$IPS" add blacklist 240.0.0.0/4
-"$IPS" add blacklsit 224.0.0.0/4
-"$IPS" add blacklist 162.142.125.0/24
-"$IPS" add blacklist 167.94.138.0/24
-"$IPS" add blacklist 198.20.69.0/24
-"$IPS" add blacklist 198.20.70.114
-"$IPS" add blacklist 93.120.27.62
-"$IPS" add blacklist 66.240.236.119
-"$IPS" add blacklist 66.240.205.34
-"$IPS" add blacklist 198.20.99.130
-"$IPS" add blacklist 71.6.135.131
-"$IPS" add blacklist 66.240.192.138
-"$IPS" add blacklist 71.6.167.142
-"$IPS" add blacklist 82.221.105.0/24
-"$IPS" add blacklist 71.6.165.200
-"$IPS" add blacklist 188.138.9.50
-"$IPS" add blacklist 85.25.103.50
-"$IPS" add blacklist 85.25.43.94
-"$IPS" add blacklist 71.6.146.185
-"$IPS" add blacklist 71.6.158.166
-"$IPS" add blacklist 198.20.87.98
-"$IPS" add blacklist 185.163.109.66
-"$IPS" add blacklist 94.102.49.0/24
-"$IPS" add blacklist 155.94.222.0/24
-"$IPS" add blacklist 155.94.254.0/24
-"$IPS" add blacklist 162.142.125.0/24
-"$IPS" add blacklist 167.94.138.0/24
-"$IPS" add blacklist 167.94.145.0/24
-"$IPS" add blacklist 167.94.146.0/24
-"$IPS" add blacklist 167.248.133.0/24
-"$IPS" add blacklist 100.64.0.0/10
-"$IPS" add blacklist 169.254.0.0/16
-"$IPS" add blacklist 192.0.0.0/24
-"$IPS" add blacklist 203.0.113.0/24
-"$IPS" add blacklist 198.18.0.0/15
-"$IPS" add blacklist 2602:80d:1000:b0cc:e::/32
-"$IPS" add blacklist 2620:96:e000:b0cc:e::/32
+while IFS= read -r bad_ip
+do
+  "$IPS" add blacklist "$bad_ip" 
+done < "./blacklist"
 "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA"
 
 # Advanced FireWall ruleset.

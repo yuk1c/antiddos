@@ -1,32 +1,34 @@
-## A new firewall (antiDDoS) script based on ipt-nft & kernel tweaks
+## 🛡️ *yuki-antiDDoS* - simple protection against DDoS-attacks.
 
-## Installation
+### 📥 Installation
 ```
 sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-persistent nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
-## Blocked/patched attack types:
-- [x] TCP SYN Flood
-- [x] TCP SYN src-port <1024 
-- [x] TCP ACK Flood
-- [x] TCP SYN-ACK Flood/TCP Reflection
-- [x] TCP STOMP Attack
-- [x] TCP RST Flood
-- [x] TCP FIN Flood
-- [x] Spoofed attacks
-- [x] UDP Flood
-- [x] ICMP Flood & PoD
-- [x] GREIP, ESP, AH, IGMP Floods
-- [x] Many sophisticated TCP attacks
-- [x] HANDSHAKE & Slowloris attacks
-- [x] Simple HTTP Flood with high requests volume
-- [x] Amplification DDoS
-- [x] IP Malformed Header attack
-- [x] IP Invalid Fragmentation attacks
-- [x] SNMP-Based attacks
+### 📋 Requirements
+- Bash
+- Ubuntu 20.04 or later.
+<hr>
+
+### ⛔ Blocked/patched attack types:
+- [x] [TCP SYN Flood](https://github.com/yuk1c/antiddos/wiki/TCP-SYN-Flood)
+- [x] [TCP ACK Flood](https://github.com/yuk1c/antiddos/wiki/TCP-ACK-Flood)
+- [x] [TCP SYN-ACK Flood/TCP Reflection](https://github.com/yuk1c/antiddos/wiki/TCP-SYN-ACK-Flood)
+- [x] [TCP STOMP Attack](https://github.com/yuk1c/antiddos/wiki/TCP-STOMP-ACKPSH-Flood)
+- [x] [TCP RST Flood](https://github.com/yuk1c/antiddos/wiki/TCP-FIN-or-RST-Flood)
+- [x] [TCP FIN Flood](https://github.com/yuk1c/antiddos/wiki/TCP-FIN-or-RST-Flood)
+- [x] [Spoofed attacks](https://github.com/yuk1c/antiddos/wiki/Spoofing-or-Fraggle-attacks)
+- [x] [UDP Flood](https://github.com/yuk1c/antiddos/wiki/UDP-Flood)
+- [x] [ICMP Flood & PoD](https://github.com/yuk1c/antiddos/wiki/ICMP-Flood)
+- [x] [GREIP, ESP, AH, IGMP Floods](https://github.com/yuk1c/antiddos/wiki/GREIP-and-ESP-and-AH-and-IGMP-Floods)
+- [x] [Many sophisticated TCP attacks](https://github.com/yuk1c/antiddos/wiki/TCP-Sophiscated-Attacks)
+- [x] [HANDSHAKE & Slowloris attacks](https://github.com/yuk1c/antiddos/wiki/HANDSHAKE-&-Slowloris-Attacks)
+- [x] [Amplification DDoS](https://github.com/yuk1c/antiddos/wiki/Amplified-DDoS)
 - [x] Potential IPv6 simple attacks
 
-### Other features:
+<hr>
+
+### ✨ Other features:
 - [ ] BitTorrent Amplification blocking
 - [ ] SIP scanning blocking
 - [ ] SSLv2/SSLv3 HTTPS blocking
@@ -36,47 +38,35 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-pe
 - [ ] Advanced spoofing blocking
 - [ ] SSH/oVPN... whitelisting
 
-### Updating the script:
+### 🔄 Updating the script:
 ```
 cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 ```
-### To report about new DDoS attack to a creator:
-– Make sure you're under DDoS
-```
-sudo dmesg > dmesg.txt && sudo tcpdump -c 5000 -n -w capture_of_ddos.pcap
-```
-– Then send these files to @yuk1meow (telegram).
 
-– Finally, the attack will be patched, if possible.
+### 🗑️ Uninstalling the script:
+<code>sudo iptables-nft -P INPUT ACCEPT && sudo nft flush ruleset && sudo ipset destroy blacklist</code>
+###### After this, restore original sysctl.conf from a backup, and save changes: <code>sudo netfilter-persistent save</code>
 
-### You're under volumetric DDoS?
-- You should buy a protected server because this DDoS Attack type can't be blocked normally on the server side.
-- As a temporary solution, you can set lower rate limits. It will help a bit.
+<hr>
 
-### Script work on:
-- Ubuntu 20.04–23.04
-
-### Have some problems?
-- Restart your server and contact me via Telegram (@yuk1meow).
-
-### Script may cause problems, if:
-- You use another antiDDoS script (uninstall it)
-- You use a modified kernel (install the official kernel)
-- You use complicated routing (don't use the script)
-- You use it on a router
-- You use it with VPN
-  
-### Allowing needed ports:
-```
-sudo iptables-nft -A INPUT -p [tcp/udp] -m multiport --dports [port,port...] (max – 15 ports) -j ACCEPT
-```
-Example: sudo iptables-nft -A INPUT -p tcp -m multiport --dports 1194 -j ACCEPT (will allow tcp to 1194)
-
-### To save rules:
+### 💾 Saving the rules:
 ```
 sudo netfilter-persistent save
 ```
 
-### Slow TCP Download speed?
-Then try to increase the limit for ACK and ACK-PSH packets.
+### ✅ Allowing needed ports:
+<code>sudo iptables-nft -I INPUT -p [tcp/udp] -m multiport --dports [port,port...] (max – 15 ports) -j ACCEPT</code>
+###### Example: sudo iptables-nft -I INPUT -p tcp -m multiport --dports 1194 -j ACCEPT (will allow tcp to 1194).
 
+<hr>
+
+### 🚩 Common issues/questions
+| ❃ Issue/Question  | ❃ Fix/Answer  |
+| ------------- |:------------------:|
+| Slow TCP Network Speed | Increase ACK and ACK-PSH Limit |
+| Slow UDP Network Speed | Increase UDP Limit |
+| Why script doesn't help me? | You have slow server, or you're just under Volumetric DDoS attack. You might try lower limits. |
+| I allowed needed port, but service on it won't work. | Your service probably works on UDP. Try allowing port on UDP. |
+| Can i view stats of rules? | Yes, you can. Use the following command: sudo nft list ruleset. |
+| Does this script works with complicated routing? | Nah, it's not. But to fix it, set rp_filter to 2. |
+| I have other problems, what to do? | Open an issue or contact me via Telegram (@yuk1meow). |

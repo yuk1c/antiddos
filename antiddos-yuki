@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Script written to protect Linux servers.
 
-# For best results, install fail2ban and any IPS.
+# For best results, install fail2ban.
 # Enjoy! Made by yuki with love <3.
 
 # --------------------------------
@@ -62,7 +62,7 @@ mitigate_udp_flood "" "UDP LIMIT" "DROP"
 
 # Allow limited ICMP traffic while blocking specific types of ICMP for improved security.
 # ----------------------------------------------------------------
-icmp_block "echo-request" '-m length --length 1:64 -m comment --comment "PING"' "ACCEPT"
+icmp_block "echo-request" '-m length --length 1:64 -m state --state NEW -m comment --comment "PING"' "ACCEPT"
 icmp_block "" "-m limit --limit 2/s --limit-burst 2" "ACCEPT"
 icmp_block "address-mask-request" "" "DROP"
 icmp_block "router-solicitation" "" "DROP"
@@ -74,10 +74,15 @@ icmp_block "redirect" "" "DROP"
 "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 7/m --limit-burst 2 -j ACCEPT
 "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -j DROP
 
+# To relieve server load during ACK Floods, restrict the outgoing TCP RST packets per second (PPS).
+# ----------------------------------------------------------------
+"$IP" -t raw -I OUTPUT -p tcp --tcp-flags RST RST -m limit —limit 10/s -j ACCEPT
+"$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
+
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
 # ----------------------------------------------------------------
 tcp_filter "SYN,ACK,FIN,PSH SYN,ACK,FIN,PSH"
-tcp_filter "ALL SYN,RST,ACK,FIN,URG" 
+tcp_filter "ALL SYN,RST,ACK,FIN,URG"
 tcp_filter "RST,PSH,URG RST,PSH,URG"
 tcp_filter "ALL SYN,FIN,PSH,URG"
 tcp_filter "SYN,ACK,FIN,RST RST"
@@ -111,12 +116,6 @@ tcp_filter "ALL ALL"
 # Restrict the number of connections per IP to mitigate the impact of Handshake and Slowloris attacks.
 # ----------------------------------------------------------------
 "$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" -m comment --comment "CONNECTION LIMIT" -j "$CLA"
-
-# Protect webserver(s) against HTTP Flood & SYN Flood.
-# Note: Consider removing these rules if you're using a proxy/CDN.
-# ----------------------------------------------------------------
-"$IP" -t mangle -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --set
-"$IP" -t mangle -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m state --state NEW -m recent --update --seconds 60 --hitcount 200 -m comment --comment "HTTP PROTECTION" -j DROP
 
 # Drop SYNs with src-port <1024 to prevent many attack types.
 # ----------------------------------------------------------------
@@ -153,21 +152,12 @@ tcp_filter "ALL ALL"
 # We use big hashsize, so it doesn't affects performance.
 # ----------------------------------------------------------------
 "$IPS" create blacklist nethash hashsize 260000
-while IFS= read -r bad_ip
-do
-  "$IPS" add blacklist "$bad_ip" 
-done < "./blacklist"
+while IFS= read -r bad_ip; do
+	"$IPS" add blacklist "$bad_ip"
+done <"./blacklist"
 "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA"
 
 # Advanced FireWall ruleset.
-
-# Patch "Stacheldraht" malware.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -p tcp --sport 16660 -j DROP
-
-# To strengthen security measures, block the specific leaked OVH Bypass payload from being processed or transmitted.
-# --------------------------------
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
 
 # To mitigate the impact of certain attacks, block suspicious strings from being processed or transmitted.
 # --------------------------------
@@ -177,6 +167,9 @@ done < "./blacklist"
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP
 
 # Additional beta rules.
+
+# To strengthen security measures, block the specific leaked OVH Bypass payload from being processed or transmitted.
+# "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
 
 # Better protection for HTTPS/HTTP server(s):
 # "$IP" -A INPUT -p tcp --dport 80 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
@@ -265,22 +258,18 @@ done < "./blacklist"
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
 
 # To enhance security, block one of all exposed payloads of the IP-NULL method.
-# --------------------------------
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
 
 # Patch SYNOPT-ACK Attack.
-# --------------------------------
 # "$IP" -t raw -A PREROUTING -p tcp --sport 21 --dport 21 --tcp-flags SYN,ACK SYN,ACK -j DROP
 
 # To enhance security, block certain exposed payloads from being processed or transmitted.
-# --------------------------------
 # "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0xd3da" -m state --state ESTABLISHED -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -m state --state ESTABLISHED -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x38d3" -m state --state ESTABLISHED -j DROP
 
 # Enhance security by dropping HTTP requests with suspicious user agents.
-# --------------------------------
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'python-requests' --algo kmp -j "$UBA"
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'benchmark' --algo kmp -j "$UBA"
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'MD5(' --algo kmp -j "$UBA"
@@ -290,8 +279,12 @@ done < "./blacklist"
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'shodan' --algo kmp -j "$UBA"
 
 # Drop packets with popular SNMP-based attack signatures to mitigate SNMP attacks.
-# --------------------------------
 # "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
+
+# Drop packets sent to DNS port but which are not dns packets.
+# You cam make multiple rules like that.
+# "$IP" -A INPUT -p udp --dport 53 -m udp -m string --string "DNS" --algo bm --to 65535 -j ACCEPT
+# "$IP" -A INPUT -p udp --dport 53 -j DROP
 
 # --------------------------------
 

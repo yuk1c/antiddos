@@ -45,7 +45,7 @@ cd ~/antiddos && git pull && sudo bash antiddos-yuki && cd
 
 ### 🗑️ Uninstalling the script:
 <code>sudo iptables-nft -P INPUT ACCEPT && sudo nft flush ruleset && sudo ipset destroy blacklist</code>
-###### After this, restore original sysctl.conf from a backup, and save changes: <code>sudo netfilter-persistent save</code>
+###### After this, restore the original sysctl.conf from a backup, and save changes: <code>sudo netfilter-persistent save</code>
 
 <hr>
 
@@ -65,8 +65,9 @@ sudo netfilter-persistent save
 | ------------- |:------------------:|
 | Slow TCP Network Speed | Increase ACK and ACK-PSH Limit |
 | Slow UDP Network Speed | Increase UDP Limit |
-| Why script doesn't help me? | You have slow server, or you're just under Volumetric DDoS attack. You might try lower limits. |
-| I allowed needed port, but service on it won't work. | Your service probably works on UDP. Try allowing port on UDP. |
-| Can i view stats of rules? | Yes, you can. Use the following command: sudo nft list ruleset. |
+| Why script doesn't help me? | You have a slow server, or you're just under a Volumetric DDoS attack. You might try lower limits. |
+| I allowed the needed port, but the service on it won't work. | Your service probably works on UDP. Try allowing port on UDP. |
+| Can i view the stats of the rules? | Yes, you can. Use the following command: sudo nft list ruleset. |
 | Does this script works with complicated routing? | Nah, it's not. But to fix it, set rp_filter to 2. |
 | I have other problems, what to do? | Open an issue or contact me via Telegram (@yuk1meow). |
+| Network doesn't work after I applied the script, what to do? | Restart your server and never use my script again on the same host. Because this is unfixable - caused by unknown for my problem. |

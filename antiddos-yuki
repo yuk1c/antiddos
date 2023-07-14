@@ -8,7 +8,7 @@
 
 # RootCheck
 if [ "$(whoami)" != "root" ]; then
-	echo -e "${BRed}[!] Run this script as root."
+	printf "${BRed}[ERROR] This script must be run as root.\n"
 	tput sgr0
 	exit 255
 fi
@@ -76,12 +76,12 @@ icmp_block "redirect" "" "DROP"
 
 # To relieve server load during ACK Floods, restrict the outgoing TCP RST packets per second (PPS).
 # ----------------------------------------------------------------
-"$IP" -t raw -I OUTPUT -p tcp --tcp-flags RST RST -m limit —limit 10/s -j ACCEPT
+"$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -m limit —limit 10/s -j ACCEPT
 "$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
 
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
+# If you're trying to optimize the ruleset, you can comment all except ALL/NONE and ALL/ALL.
 # ----------------------------------------------------------------
-tcp_filter "SYN,ACK,FIN,PSH SYN,ACK,FIN,PSH"
 tcp_filter "ALL SYN,RST,ACK,FIN,URG"
 tcp_filter "RST,PSH,URG RST,PSH,URG"
 tcp_filter "ALL SYN,FIN,PSH,URG"
@@ -102,7 +102,7 @@ tcp_filter "ALL ALL"
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 3/m --limit-burst 1 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 70/m --limit-burst 4 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment --comment "AMPLIFICATION" -j DROP
+"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,389,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment --comment "AMPLIFICATION" -j DROP
 
 # Discard TCP/UDP packets with invalid length to counter certain attacks.
 # ----------------------------------------------------------------
@@ -122,6 +122,7 @@ tcp_filter "ALL ALL"
 "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN INVALID SPORT" -j DROP
 
 # Drop new non-SYN TCP packets to mitigate common TCP attacks.
+# If you're trying to optimize the ruleset, check this rule.
 # ----------------------------------------------------------------
 "$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "NEW TCP NOT SYN DROP" -j DROP
 
@@ -160,7 +161,7 @@ done <"./blacklist"
 # Advanced FireWall ruleset.
 
 # To mitigate the impact of certain attacks, block suspicious strings from being processed or transmitted.
-# --------------------------------
+# ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP

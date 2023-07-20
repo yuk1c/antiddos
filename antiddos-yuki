@@ -53,7 +53,6 @@ mitigate_tcp_flood "--tcp-flags ACK ACK" "$APL" 2 "ackflood" "ACK LIMIT"
 mitigate_tcp_flood "--tcp-flags SYN,ACK SYN,ACK" "$SAPL" 2 "synackflood" "SYNACK LIMIT"
 mitigate_tcp_flood "--tcp-flags ACK,PSH ACK,PSH" "$APPL" 2 "ackpshflood" "ACKPSH LIMIT"
 mitigate_tcp_flood "--tcp-flags RST RST" "$RPL" 2 "rstflood" "RST LIMIT"
-mitigate_tcp_flood "--tcp-flags FIN FIN" "$FPL" 2 "finflood" "FIN LIMIT"
 
 # Mitigate UDP Floods by limiting the number of UDP packets per second (PPS).
 # ----------------------------------------------------------------
@@ -62,7 +61,7 @@ mitigate_udp_flood "" "UDP LIMIT" "DROP"
 
 # Allow limited ICMP traffic while blocking specific types of ICMP for improved security.
 # ----------------------------------------------------------------
-icmp_block "echo-request" '-m length --length 1:64 -m state --state NEW -m comment --comment "PING"' "ACCEPT"
+icmp_block "echo-request" '-m length --length 1:64 -m comment --comment "PING"' "ACCEPT"
 icmp_block "" "-m limit --limit 2/s --limit-burst 2" "ACCEPT"
 icmp_block "address-mask-request" "" "DROP"
 icmp_block "router-solicitation" "" "DROP"
@@ -82,12 +81,6 @@ icmp_block "redirect" "" "DROP"
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
 # If you're trying to optimize the ruleset, you can comment all except ALL/NONE and ALL/ALL.
 # ----------------------------------------------------------------
-tcp_filter "ALL SYN,RST,ACK,FIN,URG"
-tcp_filter "RST,PSH,URG RST,PSH,URG"
-tcp_filter "ALL SYN,FIN,PSH,URG"
-tcp_filter "SYN,ACK,FIN,RST RST"
-tcp_filter "ALL FIN,PSH,URG"
-tcp_filter "FIN,RST FIN,RST"
 tcp_filter "SYN,FIN SYN,FIN"
 tcp_filter "SYN,RST SYN,RST"
 tcp_filter "FIN,ACK FIN"
@@ -110,6 +103,7 @@ tcp_filter "ALL ALL"
 "$IP" -t raw -A PREROUTING -p udp -m length --length 0:8 -m comment --comment "INVALID LENGTH" -j DROP
 
 # Drop all invalid packets.
+# Add "UNTRACKED" for additional protection. But this may cause problems!
 # ----------------------------------------------------------------
 "$IP" -t mangle -I PREROUTING -p all -m state --state INVALID -m comment --comment "INVALID PACKET BLOCK" -j DROP
 
@@ -166,6 +160,7 @@ done <"./blacklist"
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
 "$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP
+"$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
 
 # Additional beta rules.
 
@@ -233,8 +228,12 @@ done <"./blacklist"
 # "$IP" -A INPUT -p tcp --syn -m recent --name blacklist --set -j DROP
 # "$IP" -A INPUT -p tcp --tcp-flags ALL SYN,ACK -m recent --name blacklist --rcheck --seconds 60 --hitcount 10 -j DROP
 
-# Advanced IP spoofing blocking.
-# "$IP" -t raw -A PREROUTING -m ipv4options --ssrr -j DROP
+# Advanced IP spoofing blocking + additional protection.
+# "$IP" -t raw -A PREROUTING -m ipv4options --option ssrr -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --option lsrr -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --option rr -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --option nop -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --option security -j DROP
 # "$IP" -t raw -A PREROUTING -m hl --hl-eq 1 -j DROP
 
 # Patch random rare attack.
@@ -258,9 +257,6 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
 
-# To enhance security, block one of all exposed payloads of the IP-NULL method.
-# "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
-
 # Patch SYNOPT-ACK Attack.
 # "$IP" -t raw -A PREROUTING -p tcp --sport 21 --dport 21 --tcp-flags SYN,ACK SYN,ACK -j DROP
 
@@ -282,10 +278,18 @@ done <"./blacklist"
 # Drop packets with popular SNMP-based attack signatures to mitigate SNMP attacks.
 # "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
 
-# Drop packets sent to DNS port but which are not dns packets.
+# Drop packets sent to DNS port but which are not DNS packets.
 # You cam make multiple rules like that.
-# "$IP" -A INPUT -p udp --dport 53 -m udp -m string --string "DNS" --algo bm --to 65535 -j ACCEPT
-# "$IP" -A INPUT -p udp --dport 53 -j DROP
+# "$IP" -t raw -A PREROUTING -p udp --dport 53 -m udp ! -m string --string "DNS" --algo bm --to 65535 -j ACCEPT
+
+# Block heartbleed attack.
+# "$IP" -t raw -A PREROUTING -p tcp --dport 443 -m u32 --u32 "52=0x18030000 && 56=0x00000000" -j DROP
+
+# Block shellshock attack.
+# "$IP" -t raw -A PREROUTING -p tcp --dport 80 -m string --algo bm --string '() {' -j DROP
+
+# Extremely protect your SSH against handshake/socket methods.
+# "$IP" -t mangle -A PREROUTING -p tcp --dport "$SSH" -m connlimit --connlimit-above 3 -j REJECT
 
 # --------------------------------
 

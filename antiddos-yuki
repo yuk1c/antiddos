@@ -81,7 +81,6 @@ icmp_block "redirect" "" "DROP"
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
 # If you're trying to optimize the ruleset, you can comment all except ALL/NONE and ALL/ALL.
 # ----------------------------------------------------------------
-tcp_filter "SYN,FIN SYN,FIN"
 tcp_filter "SYN,RST SYN,RST"
 tcp_filter "FIN,ACK FIN"
 tcp_filter "ACK,URG URG"
@@ -97,11 +96,6 @@ tcp_filter "ALL ALL"
 "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 70/m --limit-burst 4 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,389,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment --comment "AMPLIFICATION" -j DROP
 
-# Discard TCP/UDP packets with invalid length to counter certain attacks.
-# ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p tcp -m length --length 0 -m comment --comment "INVALID LENGTH" -j DROP
-"$IP" -t raw -A PREROUTING -p udp -m length --length 0:8 -m comment --comment "INVALID LENGTH" -j DROP
-
 # Drop all invalid packets.
 # Add "UNTRACKED" for additional protection. But this may cause problems!
 # ----------------------------------------------------------------
@@ -112,6 +106,7 @@ tcp_filter "ALL ALL"
 "$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" -m comment --comment "CONNECTION LIMIT" -j "$CLA"
 
 # Drop SYNs with src-port <1024 to prevent many attack types.
+# If you're trying to optimize the ruleset, you can comment this rule.
 # ----------------------------------------------------------------
 "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN INVALID SPORT" -j DROP
 
@@ -333,6 +328,8 @@ echo -e "
 
 # Enable SYN-Cookies.
 # Helps in SYN Flood DDoS mitigation.
+# If your server is frequently under TCP DDoS,
+# Then you can set '2' here.
 # --------------------------------
  net.ipv4.tcp_syncookies = 1
 
@@ -357,6 +354,7 @@ echo -e "
  net.ipv4.route.max_size = 2147483647
 
 # Network security hardening.
+# Usually causes problems on routers.
 # --------------------------------
  net.ipv4.conf.all.accept_redirects = 0
  net.ipv4.conf.all.secure_redirects = 0
@@ -402,8 +400,9 @@ echo -e "
  #kernel.sysrq = 0 # Disables sysrq (not recommended)
 
 # Performance tuning.
-# Set somaxconn to 2000000 if you have very powerful server.
-# Your server will be able to handle 2 mil connections. 0_0
+# Set somaxconn to 3240000 if you have very powerful server.
+# Your server will be able to handle 3+ mil connections. 0_0
+# Also, you can uncomment stuff in the end (in this case).
 # Disabled checksum verification in NF because the NIC usually already calculates checksums.
 # --------------------------------
  kernel.sched_tunable_scaling = 1
@@ -413,6 +412,10 @@ echo -e "
  net.core.somaxconn = 32000
  net.ipv4.tcp_keepalive_probes = 5
  net.netfilter.nf_conntrack_checksum = 0
+ # Tweaks for very powerful servers
+ # net.ipv4.tcp_max_tw_buckets = 600000000
+ # net.core.netdev_max_backlog = 50000
+ # net.ipv4.tcp_max_syn_backlog = 3240000
 
 # Set max conntrack table size.
 # --------------------------------
@@ -435,7 +438,7 @@ echo -e "
 # --------------------------------
  net.ipv4.ip_local_port_range=1024 65535
 
-# Disable conntrack TCP Loose (we need this to use SYN Proxy).
+# Conntrack strict mode.
 # --------------------------------
  net.netfilter.nf_conntrack_tcp_loose = 0
 
@@ -459,7 +462,7 @@ Check the network now, and if it's fine - save the rules using 'sudo netfilter-p
 echo -e "\nDrop policy blocks everything that isnt allowed."
 echo -e "Allow needed TCP port with 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'"
 echo -e "For UDP port you can use 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'"
-echo -e "Also you can check stats: 'iptables-nft -L -n -v'"
+echo -e "Also you can check stats: 'iptables-nft -L -n -v' or 'nft list ruleset'"
 
 # Reset terminal color and exit.
 tput sgr0

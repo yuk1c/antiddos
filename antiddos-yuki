@@ -49,7 +49,7 @@ cp /etc/sysctl.conf{,.backup}
 # To mitigate SYN/SYN-ACK/ACK/ACK-PSH/RST/FIN floods, restrict the number of SYN/SYN-ACK/ACK/ACK-PSH/RST/FIN packets per second (PPS).
 # ----------------------------------------------------------------
 mitigate_tcp_flood "--syn" "$SPL" 5 "synflood" "SYN LIMIT"
-mitigate_tcp_flood "--tcp-flags ACK ACK" "$APL" 2 "ackflood" "ACK LIMIT"
+mitigate_tcp_flood "--ack" "$APL" 2 "ackflood" "ACK LIMIT"
 mitigate_tcp_flood "--tcp-flags SYN,ACK SYN,ACK" "$SAPL" 2 "synackflood" "SYNACK LIMIT"
 mitigate_tcp_flood "--tcp-flags ACK,PSH ACK,PSH" "$APPL" 2 "ackpshflood" "ACKPSH LIMIT"
 mitigate_tcp_flood "--tcp-flags RST RST" "$RPL" 2 "rstflood" "RST LIMIT"
@@ -75,7 +75,7 @@ icmp_block "redirect" "" "DROP"
 
 # To relieve server load during ACK Floods, restrict the outgoing TCP RST packets per second (PPS).
 # ----------------------------------------------------------------
-"$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -m limit —limit 10/s -j ACCEPT
+"$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -m limit —-limit 10/s -j ACCEPT
 "$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
 
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
@@ -151,13 +151,11 @@ done <"./blacklist"
 
 # To mitigate the impact of certain attacks, block suspicious strings from being processed or transmitted.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP
-"$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
-
-# Additional beta rules.
+# "$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
+# "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
+# "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
+# "$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP
+ "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
 
 # To strengthen security measures, block the specific leaked OVH Bypass payload from being processed or transmitted.
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
@@ -285,6 +283,9 @@ done <"./blacklist"
 
 # Extremely protect your SSH against handshake/socket methods.
 # "$IP" -t mangle -A PREROUTING -p tcp --dport "$SSH" -m connlimit --connlimit-above 3 -j REJECT
+
+# Block icmp type 8, so no one can ping you.
+# "$IP" -t raw -I PREROUTING -p icmp --icmp-type echo-request -j DROP
 
 # --------------------------------
 

@@ -40,13 +40,13 @@ cp /etc/sysctl.conf{,.backup}
 # Allow established and related connections.
 "$IP" -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# Allow SSH.
+# Allow SSH. Here you can implement whitelisting.
 "$IP" -A INPUT -p tcp --dport "$SSH" -j ACCEPT
 
 # --------------------------------
 # Firewall ruleset.
 
-# To mitigate SYN/SYN-ACK/ACK/ACK-PSH/RST/FIN floods, restrict the number of SYN/SYN-ACK/ACK/ACK-PSH/RST/FIN packets per second (PPS).
+# Mitigate some TCP Floods with ratelimits.
 # ----------------------------------------------------------------
 mitigate_tcp_flood "--syn" "$SPL" 5 "synflood" "SYN LIMIT"
 mitigate_tcp_flood "--ack" "$APL" 2 "ackflood" "ACK LIMIT"
@@ -54,14 +54,14 @@ mitigate_tcp_flood "--tcp-flags SYN,ACK SYN,ACK" "$SAPL" 2 "synackflood" "SYNACK
 mitigate_tcp_flood "--tcp-flags ACK,PSH ACK,PSH" "$APPL" 2 "ackpshflood" "ACKPSH LIMIT"
 mitigate_tcp_flood "--tcp-flags RST RST" "$RPL" 2 "rstflood" "RST LIMIT"
 
-# Mitigate UDP Floods by limiting the number of UDP packets per second (PPS).
+# Mitigate UDP Floods with ratelimits.
 # ----------------------------------------------------------------
 mitigate_udp_flood "-m limit --limit $UPL" "UDP" "ACCEPT"
 mitigate_udp_flood "" "UDP LIMIT" "DROP"
 
 # Allow limited ICMP traffic while blocking specific types of ICMP for improved security.
 # ----------------------------------------------------------------
-icmp_block "echo-request" '-m length --length 1:64 -m comment --comment "PING"' "ACCEPT"
+icmp_block "echo-request" '-m length --length 1:80 -m comment --comment "PING"' "ACCEPT"
 icmp_block "" "-m limit --limit 2/s --limit-burst 2" "ACCEPT"
 icmp_block "address-mask-request" "" "DROP"
 icmp_block "router-solicitation" "" "DROP"
@@ -111,32 +111,32 @@ tcp_filter "ALL ALL"
 "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN INVALID SPORT" -j DROP
 
 # Drop new non-SYN TCP packets to mitigate common TCP attacks.
-# If you're trying to optimize the ruleset, check this rule.
+# If you're trying to optimize the ruleset, check this rule. It may affect performance.
 # ----------------------------------------------------------------
 "$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "NEW TCP NOT SYN DROP" -j DROP
 
 # Drop TCP packets with invalid MSS to mitigate certain attack types.
+# Try to set max MSS to 8960 if you wanna more stricter protection.
+# But then you'll need to modify rule and do this only for your NIC.
 # ----------------------------------------------------------------
 "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:63000 -m comment --comment "INVALID MSS" -j DROP
 
 # Block specific Layer 3 protocols (ESP, GRE, AH, IGMP) to mitigate floods.
 # Remove the rules if you require these protocols.
+# If you're aiming to optimize the ruleset, consider retaining only "gre" and "igmp" while removing the rest.
 # ----------------------------------------------------------------
-"$IP" -t raw -I PREROUTING -p esp -j "$PBA"
-"$IP" -t raw -I PREROUTING -p gre -j "$PBA"
-"$IP" -t raw -I PREROUTING -p ah -j "$PBA"
-"$IP" -t raw -I PREROUTING -p igmp -j "$PBA"
+"$IP" -t raw -A PREROUTING -p ah -j "$PBA"
+"$IP" -t raw -A PREROUTING -p esp -j "$PBA"
+"$IP" -t raw -A PREROUTING -p gre -j "$PBA"
+"$IP" -t raw -A PREROUTING -p igmp -j "$PBA"
 
-# Improve security by dropping packets received on TEST-NET IP addresses.
-# ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p all -d 192.0.2.0/24 -j DROP
-
-# Limit SYN/ICMPv6 packets per second (PPS) to mitigate certain IPv6 attacks, although they are not currently common.
+# Limit SYN/ICMPv6 packets per second (PPS) & drop fragmented packets to mitigate certain IPv6 attacks, although they are not currently common.
 # ----------------------------------------------------------------
 "$IP6" -t raw -A PREROUTING -p icmpv6 -m limit --limit 3/s -j ACCEPT
 "$IP6" -t raw -A PREROUTING -p icmpv6 -j DROP
 "$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 7/s --limit-burst 4 -j ACCEPT
 "$IP6" -t raw -A PREROUTING -p tcp --syn -j DROP
+"$IP6" -t raw -A PREROUTING -f -j DROP
 
 # Block some multicast IPs, censys IPs, shodan IPs...
 # We use big hashsize, so it doesn't affects performance.
@@ -148,31 +148,33 @@ done <"./blacklist"
 "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA"
 
 # Advanced FireWall ruleset.
+# ----------------------------------------------------------------
+
+# Block null payload.
+"$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
 
 # To mitigate the impact of certain attacks, block suspicious strings from being processed or transmitted.
-# ----------------------------------------------------------------
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "CRI" -j DROP
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP
- "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
 
 # To strengthen security measures, block the specific leaked OVH Bypass payload from being processed or transmitted.
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
 
-# Better protection for HTTPS/HTTP server(s):
+# Better protection for HTTPS/HTTP server(s).
 # "$IP" -A INPUT -p tcp --dport 80 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
 # "$IP" -A INPUT -p tcp --dport 443 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
 
-# Block SIP server scanners:
+# Block SIP server scanners.
 # "$IP" -A INPUT -p udp --dport 5060 -m string --string "sipvicious" --algo bm -j DROP
 # "$IP" -A INPUT -p udp --dport 5060 -m string --string "friendly-scanner" --algo bm -j DROP
 
-# Protect SMTP server against weird packets:
+# Protect SMTP server against weird packets.
 # "$IP" -A INPUT -p tcp --dport 25 -m string --string "HELO" --algo bm --to 65535 -j DROP
 # "$IP" -A INPUT -p tcp --dport 25 -m string --string "EHLO" --algo bm --to 65535 -j DROP
 
-# Block torrents (useful against bittorrent amp):
+# Block torrents (useful against bittorrent amp).
 # "$IP" -A INPUT -m string --string "BitTorrent" --algo bm -j DROP
 # "$IP" -A INPUT -m string --string "uTorrent" --algo bm -j DROP
 
@@ -183,35 +185,28 @@ done <"./blacklist"
 # Block HTTP TRACE method.
 # "$IP" -A INPUT -p tcp --dport 80 -m string --string "TRACE" --algo bm -j DROP
 
-# Block FTP SITE EXEC Command:
+# Block FTP SITE EXEC Command.
 # "$IP" -A INPUT -p tcp --dport 21 -m string --string "SITE EXEC" --algo bm -j DROP
 
-# Block SQLi attemps
-# If your website under cloudflare you should change 3306 to HTTPS or HTTP.
+# Block SQLi attemps.
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "union select" --algo bm -j DROP
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "information_schema" --algo bm -j DROP
 
-# Advanced AntiSpoofing [NOT RECOMMENDED]:
+# Advanced AntiSpoofing [NOT RECOMMENDED].
 # "$IP" -A INPUT -p all ! -d <ip_of_your_server> -j DROP
 
-# SSH Whitelisting:
-# "$IP" -t raw -I PREROUTING -p tcp --dport 22 ! -s <trusted_ip> -j DROP
-
-# OpenVPN Whitelisting:
+# OpenVPN Whitelisting.
 # "$IP" -t raw -I PREROUTING -p <tcp/udp> --dport 1194 ! -s <trusted_ip> -j DROP
 
 # Block DNS zone transfers and recursion.
 # "$IP" -t raw -A PREROUTING -p udp --dport 53 -m string --string "recursion" --algo bm -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --dport 53 -m string --hex-string "|0d 0a 0d 0a|" --algo bm -j DROP
 
-# Block advanced spoofing:
-# "$IP" -A INPUT -m rpfilter -j DROP
-
-# Port scan blocking:
+# Port scan blocking.
 # "$IP" -t raw -A PREROUTING -m state --state NEW -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s -j ACCEPT
 # "$IP" -t raw -A PREROUTING -m state --state NEW -p tcp --tcp-flags SYN,ACK,FIN,RST RST -j DROP
 
-# Geo blocking (in this rule, we block China, for example):
+# Geo blocking (in this rule, we block China, for example).
 # "$IP" -t raw -I PREROUTING -m geoip --src-cc CN -j DROP
 
 # Patch random attack, lol.
@@ -287,6 +282,24 @@ done <"./blacklist"
 # Block icmp type 8, so no one can ping you.
 # "$IP" -t raw -I PREROUTING -p icmp --icmp-type echo-request -j DROP
 
+# Proxy with iptables (example: redirect tcp packets from 25565 to your home 25500)
+# "$IP" -t nat -A PREROUTING -i eth0 -p tcp --dport 25565 -j DNAT --to-destination your_home_ip:25500
+# "$IP" -t nat -A POSTROUTING -o eth0 -p tcp --dport 25565 -d your_home_ip -j SNAT --to-source your_server_ext_IP
+
+# OpenVPN Shield. Remove other rules that allow OpenVPN, to work properly.
+# "$IP" -A INPUT -p udp --dport 1194 --match bpf --bytecode "16,48 0 0 0,84 0 0 240,21 0 12 64,48 0 0 9,21 0 10 17,40 0 0 6,69 8 0 8191,177 0 0 0,80 0 0 8,21 0 5 56,64 0 0 17,21 0 3 1,72 0 0 4,21 0 1 62,6 0 0 65535,6 0 0 0" -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 1/second --hashlimit-burst 1 --hashlimit-mode srcip --hashlimit-name accept-openvpn -j ACCEPT
+
+# OpenVPN Shield.
+# "$IP" -A INPUT -p udp --dport 1194 -m connlimit --connlimit-above 2 -j DROP
+
+# Another patch against some weird attacks.
+# "$IP" -A INPUT -p icmp --icmp-type 3/4 -j DROP
+
+# [ALPHA] SYN and ACK Challenge.
+# "$IP" -A INPUT -p tcp --tcp-flags SYN SYN -j TCPMSS --clamp-mss-to-pmtu
+# "$IP" -A INPUT -p tcp --tcp-flags ALL ACK -j DROP
+# "$IP" -A INPUT -p tcp --tcp-flags ALL RST,ACK -j DROP
+
 # --------------------------------
 
 # If you have added port-allowing rules to the script, uncomment the following two rules to enable logging to dmesg.
@@ -327,15 +340,19 @@ echo -e "
  net.netfilter.nf_conntrack_icmp_timeout = 2
  net.netfilter.nf_conntrack_icmpv6_timeout = 3
 
-# Enable SYN-Cookies.
-# Helps in SYN Flood DDoS mitigation.
-# If your server is frequently under TCP DDoS,
-# Then you can set '2' here.
+# Enabling SYN-Cookies.
+# Facilitates SYN Flood DDoS mitigation.
+# If your server frequently faces TCP DDoS attacks,
+# you can set the value to '2' here.
+# Caution: certain hosting providers might block syncookies.
+# Verify if your hoster enforces this. If yes, set it to '0'.
+# Retaining the protective measure.
 # --------------------------------
  net.ipv4.tcp_syncookies = 1
 
 # Set custom SYN/SYN-ACK retries count.
 # Helps in TCP DDoS mitigation.
+# Try 1/1 instead of 1/2 if you have time for testing :)
 # --------------------------------
  net.ipv4.tcp_synack_retries = 1
  net.ipv4.tcp_syn_retries = 2
@@ -346,6 +363,7 @@ echo -e "
  net.core.wmem_max = 33554432
 
 # Use TCP MTU Probing when the kernel detects ICMP BH.
+# Selecting value '2' could enhance bandwidth speed.
 # --------------------------------
  net.ipv4.tcp_mtu_probing = 1
 
@@ -402,8 +420,8 @@ echo -e "
 
 # Performance tuning.
 # Set somaxconn to 3240000 if you have very powerful server.
-# Your server will be able to handle 3+ mil connections. 0_0
-# Also, you can uncomment stuff in the end (in this case).
+# Your server would then manage over 3 million connections. 0_0
+# Additionally, you can activate commented-out settings at the end (in this scenario).
 # Disabled checksum verification in NF because the NIC usually already calculates checksums.
 # --------------------------------
  kernel.sched_tunable_scaling = 1
@@ -458,9 +476,9 @@ systemctl enable --now netfilter-persistent
 clear
 
 echo -e "${BYellow}"
-echo -e "[✓] Script changes applied, but rules aren't saved.
+echo -e "[✓] Success. Script changes applied, but rules aren't saved.
 Check the network now, and if it's fine - save the rules using 'sudo netfilter-persistent save'.\n"
-echo -e "\nDrop policy blocks everything that isnt allowed."
+echo -e "\nDrop policy blocks everything that isn't allowed."
 echo -e "Allow needed TCP port with 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'"
 echo -e "For UDP port you can use 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'"
 echo -e "Also you can check stats: 'iptables-nft -L -n -v' or 'nft list ruleset'"

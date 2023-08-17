@@ -48,25 +48,26 @@ cp /etc/sysctl.conf{,.backup}
 
 # Mitigate some TCP Floods with ratelimits.
 # ----------------------------------------------------------------
-mitigate_tcp_flood "--syn" "$SPL" 5 "synflood" "SYN LIMIT"
-mitigate_tcp_flood "--ack" "$APL" 2 "ackflood" "ACK LIMIT"
-mitigate_tcp_flood "--tcp-flags SYN,ACK SYN,ACK" "$SAPL" 2 "synackflood" "SYNACK LIMIT"
-mitigate_tcp_flood "--tcp-flags ACK,PSH ACK,PSH" "$APPL" 2 "ackpshflood" "ACKPSH LIMIT"
-mitigate_tcp_flood "--tcp-flags RST RST" "$RPL" 2 "rstflood" "RST LIMIT"
+
+"$IP" -t raw -A PREROUTING -p tcp --syn -m hashlimit --hashlimit-mode srcip --hashlimit-name synflood --hashlimit-above "$SPL" -m comment --comment "SYN Flood" -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m hashlimit --hashlimit-mode srcip --hashlimit-name ackflood --hashlimit-above "$APL" --hashlimit-burst 2 -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m hashlimit --hashlimit-mode srcip --hashlimit-name synackflood --hashlimit-above "$SAPL" --hashlimit-burst 2 -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH -m hashlimit --hashlimit-mode srcip --hashlimit-name ackpshflood --hashlimit-above "$APPL" --hashlimit-burst 2 -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m hashlimit --hashlimit-mode srcip --hashlimit-name rstflood --hashlimit-above "$RPL" --hashlimit-burst 2 -j DROP
 
 # Mitigate UDP Floods with ratelimits.
 # ----------------------------------------------------------------
-mitigate_udp_flood "-m limit --limit $UPL" "UDP" "ACCEPT"
-mitigate_udp_flood "" "UDP LIMIT" "DROP"
+"$IP" -t raw -A PREROUTING -p udp -m limit --limit "$UPL" -j ACCEPT
+"$IP" -t raw -A PREROUTING -p udp -j DROP
 
 # Allow limited ICMP traffic while blocking specific types of ICMP for improved security.
 # ----------------------------------------------------------------
-icmp_block "echo-request" '-m length --length 1:80 -m comment --comment "PING"' "ACCEPT"
-icmp_block "" "-m limit --limit 2/s --limit-burst 2" "ACCEPT"
-icmp_block "address-mask-request" "" "DROP"
-icmp_block "router-solicitation" "" "DROP"
-icmp_block "timestamp-request" "" "DROP"
-icmp_block "redirect" "" "DROP"
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:80 -m comment --comment "Ping" -j ACCEPT
+"$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 2 -j ACCEPT
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type redirect -j DROP
 
 # To relieve server load during UDP Floods, restrict the outgoing ICMP 'Port-Unreach' packets per second (PPS).
 # ----------------------------------------------------------------
@@ -75,51 +76,51 @@ icmp_block "redirect" "" "DROP"
 
 # To relieve server load during ACK Floods, restrict the outgoing TCP RST packets per second (PPS).
 # ----------------------------------------------------------------
-"$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -m limit —-limit 10/s -j ACCEPT
+"$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -m limit --limit 10/s -j ACCEPT
 "$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
 
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
 # If you're trying to optimize the ruleset, you can comment all except ALL/NONE and ALL/ALL.
 # ----------------------------------------------------------------
-tcp_filter "SYN,RST SYN,RST"
-tcp_filter "FIN,ACK FIN"
-tcp_filter "ACK,URG URG"
-tcp_filter "ACK,FIN FIN"
-tcp_filter "ACK,PSH PSH"
-tcp_filter "ALL NONE"
-tcp_filter "ALL ALL"
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -j DROP
+"$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ALL -j DROP
 
 # Safeguard against CPU overload during AMP DDoS attacks by limiting DNS/NTP packets per second (PPS).
 # Also, drop certain other protocols that could be exploited in amplified attacks.
 # ----------------------------------------------------------------
 "$IP" -t raw -A PREROUTING -p udp --sport 123 -m limit --limit 3/m --limit-burst 1 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p udp --sport 53 -m limit --limit 70/m --limit-burst 4 -j ACCEPT
-"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,389,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment --comment "AMPLIFICATION" -j DROP
+"$IP" -t raw -A PREROUTING -p udp -m multiport --sports 19,53,111,123,137,389,1900,2140,3702,5353,7001,9000,17185,37020,37810 -m comment --comment "Amplification" -j DROP
 
 # Drop all invalid packets.
 # Add "UNTRACKED" for additional protection. But this may cause problems!
 # ----------------------------------------------------------------
-"$IP" -t mangle -I PREROUTING -p all -m state --state INVALID -m comment --comment "INVALID PACKET BLOCK" -j DROP
+"$IP" -t mangle -I PREROUTING -p all -m state --state INVALID -m comment --comment "Invalid Packet" -j DROP
 
 # Restrict the number of connections per IP to mitigate the impact of Handshake and Slowloris attacks.
 # ----------------------------------------------------------------
-"$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" -m comment --comment "CONNECTION LIMIT" -j "$CLA"
+"$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" -m comment --comment "Connection Limit" -j "$CLA"
 
 # Drop SYNs with src-port <1024 to prevent many attack types.
 # If you're trying to optimize the ruleset, you can comment this rule.
 # ----------------------------------------------------------------
-"$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN INVALID SPORT" -j DROP
+"$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN: Invalid Source Port" -j DROP
 
 # Drop new non-SYN TCP packets to mitigate common TCP attacks.
 # If you're trying to optimize the ruleset, check this rule. It may affect performance.
 # ----------------------------------------------------------------
-"$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "NEW TCP NOT SYN DROP" -j DROP
+"$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "State NEW but not SYN" -j DROP
 
 # Drop TCP packets with invalid MSS to mitigate certain attack types.
 # Try to set max MSS to 8960 if you wanna more stricter protection.
 # But then you'll need to modify rule and do this only for your NIC.
 # ----------------------------------------------------------------
-"$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:63000 -m comment --comment "INVALID MSS" -j DROP
+"$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss 536:63000 -m comment --comment "Invalid MSS" -j DROP
 
 # Block specific Layer 3 protocols (ESP, GRE, AH, IGMP) to mitigate floods.
 # Remove the rules if you require these protocols.
@@ -136,7 +137,7 @@ tcp_filter "ALL ALL"
 "$IP6" -t raw -A PREROUTING -p icmpv6 -j DROP
 "$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 7/s --limit-burst 4 -j ACCEPT
 "$IP6" -t raw -A PREROUTING -p tcp --syn -j DROP
-"$IP6" -t raw -A PREROUTING -f -j DROP
+"$IP6" -t raw -A PREROUTING -m frag -j DROP
 
 # Block some multicast IPs, censys IPs, shodan IPs...
 # We use big hashsize, so it doesn't affects performance.
@@ -478,7 +479,7 @@ clear
 echo -e "${BYellow}"
 echo -e "[✓] Success. Script changes applied, but rules aren't saved.
 Check the network now, and if it's fine - save the rules using 'sudo netfilter-persistent save'.\n"
-echo -e "\nDrop policy blocks everything that isn't allowed."
+echo -e "\nDrop policy blocks everything that isn't allowed (but we already allowed your SSH)"
 echo -e "Allow needed TCP port with 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'"
 echo -e "For UDP port you can use 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'"
 echo -e "Also you can check stats: 'iptables-nft -L -n -v' or 'nft list ruleset'"

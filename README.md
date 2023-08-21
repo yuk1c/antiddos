@@ -16,7 +16,6 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-pe
 - [x] [TCP SYN-ACK Flood/TCP Reflection](https://github.com/yuk1c/antiddos/wiki/TCP-SYN-ACK-Flood)
 - [x] [TCP STOMP Attack](https://github.com/yuk1c/antiddos/wiki/TCP-STOMP-ACKPSH-Flood)
 - [x] [TCP RST Flood](https://github.com/yuk1c/antiddos/wiki/TCP-FIN-or-RST-Flood)
-- [x] [TCP FIN Flood](https://github.com/yuk1c/antiddos/wiki/TCP-FIN-or-RST-Flood)
 - [x] [Spoofed attacks](https://github.com/yuk1c/antiddos/wiki/Spoofing-or-Fraggle-attacks)
 - [x] [UDP Flood](https://github.com/yuk1c/antiddos/wiki/UDP-Flood)
 - [x] [ICMP Flood & PoD](https://github.com/yuk1c/antiddos/wiki/ICMP-Flood)

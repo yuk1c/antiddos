@@ -8,6 +8,7 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-pe
 ### 📋 Requirements
 - Bash
 - Ubuntu 20.04 or later.
+##### Requirements for optional (advanced) rules: ebtables, arptables
 <hr>
 
 ### ⛔ Blocked/patched attack types:
@@ -15,7 +16,7 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-pe
 - [x] [TCP ACK Flood](https://github.com/yuk1c/antiddos/wiki/TCP-ACK-Flood)
 - [x] [TCP SYN-ACK Flood/TCP Reflection](https://github.com/yuk1c/antiddos/wiki/TCP-SYN-ACK-Flood)
 - [x] [TCP STOMP Attack](https://github.com/yuk1c/antiddos/wiki/TCP-STOMP-ACKPSH-Flood)
-- [x] [TCP RST Flood](https://github.com/yuk1c/antiddos/wiki/TCP-FIN-or-RST-Flood)
+- [x] [TCP RST Flood](https://github.com/yuk1c/antiddos/wiki/TCP-RST-Flood)
 - [x] [Spoofed attacks](https://github.com/yuk1c/antiddos/wiki/Spoofing-or-Fraggle-attacks)
 - [x] [UDP Flood](https://github.com/yuk1c/antiddos/wiki/UDP-Flood)
 - [x] [ICMP Flood & PoD](https://github.com/yuk1c/antiddos/wiki/ICMP-Flood)
@@ -23,19 +24,29 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-pe
 - [x] [Many sophisticated TCP attacks](https://github.com/yuk1c/antiddos/wiki/TCP-Sophiscated-Attacks)
 - [x] [HANDSHAKE & Slowloris attacks](https://github.com/yuk1c/antiddos/wiki/HANDSHAKE-&-Slowloris-Attacks)
 - [x] [Amplification DDoS](https://github.com/yuk1c/antiddos/wiki/Amplified-DDoS)
+- [x] [Null Payload Flood](https://github.com/yuk1c/antiddos/wiki/Null-Payload-Flood)
 - [x] Potential IPv6 simple attacks
 
 <hr>
 
 ### ✨ Other features:
 - [ ] BitTorrent Amplification blocking
-- [ ] SIP scanning blocking
+- [ ] SIP Scanning blocking
 - [ ] SSLv2/SSLv3 HTTPS blocking
 - [ ] HTTP Trace method blocking
 - [ ] FTP SITE EXEC blocking
-- [ ] SQLi blocking
-- [ ] Advanced spoofing blocking
-- [ ] SSH/oVPN... whitelisting
+- [ ] SQLi Blocking
+- [ ] Advanced Spoofing blocking
+- [ ] DNS/NTP Filtering
+- [ ] IP Option Filter
+- [ ] HTTP Filter
+- [ ] SSH Filter/Whitelist
+- [ ] OpenVPN Filter/Whitelist
+- [ ] iptables proxying
+- [ ] SYN/ACK Challenge
+- [ ] IP-in-IP Blocking
+- [ ] Zero TTL Blocking
+- [ ] SourcePort 1 or 0 Blocking
 
 ### 🔄 Updating the script:
 ```
@@ -64,9 +75,9 @@ sudo netfilter-persistent save
 | ------------- |:------------------:|
 | Slow TCP Network Speed | Increase ACK and ACK-PSH Limit |
 | Slow UDP Network Speed | Increase UDP Limit |
-| Why script doesn't help me? | You have a slow server, or you're just under a Volumetric DDoS attack. You might try lower limits. |
+| Why script doesn't help me? | You have a slow server, or you're just under a Volumetric DDoS attack. You might try lower limits and optional rules (advanced ruleset). |
 | I allowed the needed port, but the service on it won't work. | Your service probably works on UDP. Try allowing port on UDP. |
 | Can i view the stats of the rules? | Yes, you can. Use the following command: sudo nft list ruleset. |
 | Does this script works with complicated routing? | Nah, it's not. But to fix it, set rp_filter to 2. |
 | I have other problems, what to do? | Open an issue or contact me via Telegram (@yuk1meow). |
-| Network doesn't work after I applied the script, what to do? | Restart your server and never use my script again on the same host. Because this is unfixable - caused by unknown for my problem. |
+| Network doesn't work after I applied the script, what to do? | Restart your server and never use my script again on the same host. Because this is unfixable - caused by unknown for me problems. |

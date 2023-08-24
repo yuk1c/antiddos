@@ -4,6 +4,9 @@
 # For best results, install fail2ban.
 # Enjoy! Made by yuki with love <3.
 
+# You may try SYNProxy, but it's disables some features of the script.
+# If you need advanced protection, allow only TCP, UDP, ICMP.
+
 # --------------------------------
 
 # RootCheck
@@ -61,8 +64,9 @@ cp /etc/sysctl.conf{,.backup}
 "$IP" -t raw -A PREROUTING -p udp -j DROP
 
 # Allow limited ICMP traffic while blocking specific types of ICMP for improved security.
+# If you're trying to optimize the ruleset, you can comment icmp type blocking and rule that limits type 8.
 # ----------------------------------------------------------------
-"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:80 -m comment --comment "Ping" -j ACCEPT
+"$IP" -t raw -A PREROUTING -p icmp --icmp-type echo-request -m length --length 1:84 -m comment --comment "Ping" -j ACCEPT
 "$IP" -t raw -A PREROUTING -p icmp -m limit --limit 2/s --limit-burst 2 -j ACCEPT
 "$IP" -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP
 "$IP" -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP
@@ -71,7 +75,7 @@ cp /etc/sysctl.conf{,.backup}
 
 # To relieve server load during UDP Floods, restrict the outgoing ICMP 'Port-Unreach' packets per second (PPS).
 # ----------------------------------------------------------------
-"$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 7/m --limit-burst 2 -j ACCEPT
+"$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit 5/m --limit-burst 2 -j ACCEPT
 "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -j DROP
 
 # To relieve server load during ACK Floods, restrict the outgoing TCP RST packets per second (PPS).
@@ -159,6 +163,7 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "ddos" -j DROP
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "flood" -j DROP
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "HACKED" -j DROP
+# "$IP" -t raw -A PREROUTING -m string --algo bm --string "AFS" -j DROP
 
 # To strengthen security measures, block the specific leaked OVH Bypass payload from being processed or transmitted.
 # "$IP" -t raw -A PREROUTING -m string --algo bm --string "\x77\x47\x5E\x27\x7A\x4E\x09\xF7\xC7\xC0\xE6" -j DROP
@@ -176,8 +181,7 @@ done <"./blacklist"
 # "$IP" -A INPUT -p tcp --dport 25 -m string --string "EHLO" --algo bm --to 65535 -j DROP
 
 # Block torrents (useful against bittorrent amp).
-# "$IP" -A INPUT -m string --string "BitTorrent" --algo bm -j DROP
-# "$IP" -A INPUT -m string --string "uTorrent" --algo bm -j DROP
+# "$IP" -A INPUT -m string --string "Torrent" --algo bm -j DROP
 
 # Block SSLv2 and SSLv3 connections.
 # "$IP" -A INPUT -p tcp --dport 443 -m string --string "SSLv2" --algo bm -j DROP
@@ -225,15 +229,12 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -m ipv4options --option security -j DROP
 # "$IP" -t raw -A PREROUTING -m hl --hl-eq 1 -j DROP
 
-# Patch random rare attack.
-# "$IP" -t raw -A PREROUTING -p udp -m length --length 100:140 -m string --string "nAFS" --algo kmp --to 65535 -j DROP
-
 # Prevent NTP Reflection attacks by blocking incoming NTP Reflection packets.
 # "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
 
 # Enhance security by blocking known bypasses based on their specific patterns.
 # "$IP" -t raw -A PREROUTING -p udp -m multiport --dports 16000:29000,"$SSH" -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
-# "$IP" -t raw -A PREROUTING -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP
+# "$IP" -t raw -A PREROUTING -p udp --dport 16000:29000 -m string --to 75 --algo bm --string 'HTTP/1.1 200 OK' -j DROP # Not needed if you have enabled rule "Block HTTP sent not to HTTP port"
 # "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
 # "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "6&0xFF=0,2:5,7:16,18:255" -j DROP
 # "$IP" -t raw -A PREROUTING -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP
@@ -249,12 +250,6 @@ done <"./blacklist"
 # Patch SYNOPT-ACK Attack.
 # "$IP" -t raw -A PREROUTING -p tcp --sport 21 --dport 21 --tcp-flags SYN,ACK SYN,ACK -j DROP
 
-# To enhance security, block certain exposed payloads from being processed or transmitted.
-# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0xd3da" -m state --state ESTABLISHED -j DROP
-# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
-# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x0c54" -m state --state ESTABLISHED -j DROP
-# "$IP" -t raw -A PREROUTING -p tcp -m length --length 40 -m string --algo bm --string "0x38d3" -m state --state ESTABLISHED -j DROP
-
 # Enhance security by dropping HTTP requests with suspicious user agents.
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'python-requests' --algo kmp -j "$UBA"
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'benchmark' --algo kmp -j "$UBA"
@@ -267,9 +262,10 @@ done <"./blacklist"
 # Drop packets with popular SNMP-based attack signatures to mitigate SNMP attacks.
 # "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
 
-# Drop packets sent to DNS port but which are not DNS packets.
-# You cam make multiple rules like that.
-# "$IP" -t raw -A PREROUTING -p udp --dport 53 -m udp ! -m string --string "DNS" --algo bm --to 65535 -j ACCEPT
+# Drop packets sent to DNS/NTP port but which are not DNS/NTP packets.
+# You can make multiple rules like that.
+# "$IP" -t raw -A PREROUTING -p udp --dport 53 -m udp -m string ! --string "DNS" --algo bm --to 65535 -j ACCEPT
+# "$IP" -t raw -A PREROUTING -p udp --dport 123 -m udp -m string ! --string "NTP" --algo bm --to 65535 -j ACCEPT
 
 # Block heartbleed attack.
 # "$IP" -t raw -A PREROUTING -p tcp --dport 443 -m u32 --u32 "52=0x18030000 && 56=0x00000000" -j DROP
@@ -296,14 +292,51 @@ done <"./blacklist"
 # Another patch against some weird attacks.
 # "$IP" -A INPUT -p icmp --icmp-type 3/4 -j DROP
 
-# [ALPHA] SYN and ACK Challenge.
+# [BETA] SYN and ACK Challenge.
 # "$IP" -A INPUT -p tcp --tcp-flags SYN SYN -j TCPMSS --clamp-mss-to-pmtu
 # "$IP" -A INPUT -p tcp --tcp-flags ALL ACK -j DROP
 # "$IP" -A INPUT -p tcp --tcp-flags ALL RST,ACK -j DROP
 
+# [BETA] SourcePort;ProtocolFilter against some DDoS attacks.
+# "$IP" -A INPUT -p udp --sport 53 -m string ! --string "DNS" --algo kmp -j DROP
+# "$IP" -A INPUT -p udp --sport 123 -m string ! --string "NTP" --algo kmp -j DROP
+# "$IP" -A INPUT -p tcp --sport 80 -m string ! --string "HTTP" --algo kmp -j DROP
+
+# Block all protocols except TCP.
+# VERY Not recommended! Shouldn't be used always.
+# "$IP" -A INPUT ! -p tcp -j DROP
+
+# [BETA] Arptables ARP Flood patch.
+# arptables -A INPUT --limit-rate 10/s --limit-burst 20 -j ACCEPT
+
+# Patch new UDP Methods (Malformed DNS).
+# "$IP" -t raw -A PREROUTING -p udp -m string --string "0000000000000000" --algo bm -j DROP
+# "$IP" -t raw -A PREROUTING -p udp -m string --hex-string "|3000300030003000300030003000300030003000300030003000|" --algo bm -j DROP
+
+# Block HTTP 1.1 sent not to HTTP port.
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string ! --string "HTTP/1.1 OK" --algo kmp -j DROP
+
+# [BETA] TCP Ratelimit (All flags).
+# If you use that, you may remove other TCP ratelimits.
+# "$IP" -t raw -A PREROUTING -p tcp -m hashlimit --hashlimit-name tcp --hashlimit-mode srcip --hashlimit --hashlimit-above 10000/s -j DROP
+
+# Block some L3 unsafe protos used in modern attacks to bypass protections.
+# May block VPNs!
+# "$IP" -t raw -A PREROUTING -p ipip -j DROP
+# "$IP" -t raw -A PREROUTING -p ipcomp -j DROP
+# "$IP" -t raw -A PREROUTING -p isis -j DROP
+# "$IP" -t raw -A PREROUTING -p l2tp -j DROP
+# "$IP" -t raw -A PREROUTING -p etherip -j DROP
+
+# Block some unusual attacks by blocking zero TTL.
+# "$IP" -t raw -A PREROUTING -m ttl --ttl-eq 0 -j DROP
+
+# Block source-ports 0, 1 because they're don't serve a legitimate purpose.
+# "$IP" -t raw -A PREROUTING -p all -m multiport --sports 0,1 -j DROP
+
 # --------------------------------
 
-# If you have added port-allowing rules to the script, uncomment the following two rules to enable logging to dmesg.
+# If you have added all needed rules to the script, uncomment the following two rules to enable logging to dmesg, if you want.
 # The logging is limited to 5 messages per second.
 # "$IP" -A INPUT -m limit --limit 5/m j LOG --log-prefix "[yuki-script] DROP:" --log-ip-options --log-tcp-options --log-tcp-sequence
 # "$IP" -A INPUT -j DROP
@@ -414,7 +447,6 @@ echo -e "
  kernel.unprivileged_userns_clone = 0
  kernel.printk = 3 3 3 3
  net.core.bpf_jit_harden = 2
- net.netfilter.nf_conntrack_helper = 0
  vm.unprivileged_userfaultfd = 0
  kernel.kexec_load_disabled = 1
  #kernel.sysrq = 0 # Disables sysrq (not recommended)
@@ -449,10 +481,6 @@ echo -e "
 # Don't log bogus ICMP responses.
 # --------------------------------
  net.ipv4.icmp_ignore_bogus_error_responses = 1
-
-# Disable conntrack helper.
-# --------------------------------
- net.netfilter.nf_conntrack_helper = 0
 
 # Allow to use more ports as a s-ports.
 # --------------------------------

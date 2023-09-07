@@ -4,11 +4,17 @@
 ```
 sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-persistent nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
+###### You can add --autosave argument to save the rules automatically.
+
+### 🔽 Debian installation (root)
+```
+apt update && apt install iptables ipset netfilter-persistent ipset-persistent nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && bash antiddos-yuki && cd ..
+```
 
 ### 📋 Requirements
 - Bash
-- Ubuntu 20.04 or later.
-##### Requirements for optional (advanced) rules: ebtables, arptables
+- Ubuntu 20.04+ / [BETA] Debian 11+
+###### Requirements for optional (advanced) rules: ebtables, arptables
 <hr>
 
 ### ⛔ Blocked/patched attack types:
@@ -42,11 +48,11 @@ sudo apt update && sudo apt install iptables ipset netfilter-persistent ipset-pe
 - [ ] HTTP Filter
 - [ ] SSH Filter/Whitelist
 - [ ] OpenVPN Filter/Whitelist
-- [ ] iptables proxying
+- [ ] IPtables proxying
 - [ ] SYN/ACK Challenge
-- [ ] IP-in-IP Blocking
 - [ ] Zero TTL Blocking
 - [ ] SourcePort 1 or 0 Blocking
+- [ ] STUN Blocking 
 
 ### 🔄 Updating the script:
 ```
@@ -76,8 +82,11 @@ sudo netfilter-persistent save
 | Slow TCP Network Speed | Increase ACK and ACK-PSH Limit |
 | Slow UDP Network Speed | Increase UDP Limit |
 | Why script doesn't help me? | You have a slow server, or you're just under a Volumetric DDoS attack. You might try lower limits and optional rules (advanced ruleset). |
-| I allowed the needed port, but the service on it won't work. | Your service probably works on UDP. Try allowing port on UDP. |
-| Can i view the stats of the rules? | Yes, you can. Use the following command: sudo nft list ruleset. |
-| Does this script works with complicated routing? | Nah, it's not. But to fix it, set rp_filter to 2. |
+| I allowed the needed port, but the service on it doesn't work. | Your service probably works on UDP. Try allowing port on UDP. |
+| Can I view the stats of the rules? | Yes, you can. Use the following command: sudo nft list ruleset. |
+| Does this script work with complicated routing? | Nah, it's not (by default). But to fix it, set rp_filter to 2. (sysctl tweaks) |
+| How can I start the script with automatic saving? | Use --autosave argument. |
+| VPN Doesn't work... | Try to determine needed protocols and allow them in the script with -A or with -I If you want just apply the iptables command. Do not forget to save the changes! |
+| How to tune the script? | Check the config.sh, it contains some variables, if you have good knowledge, you can tune the config for your needs to mitigate attacks a bit better. |
 | I have other problems, what to do? | Open an issue or contact me via Telegram (@yuk1meow). |
 | Network doesn't work after I applied the script, what to do? | Restart your server and never use my script again on the same host. Because this is unfixable - caused by unknown for me problems. |

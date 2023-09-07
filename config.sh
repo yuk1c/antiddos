@@ -2,11 +2,12 @@
 # CONFIGURATION #
 #################
 #
-# Binary routes: ipt-nft, ip6t-nft, ipset, nft
+# Binary routes.
 IP="/sbin/iptables-nft"
 IP6="/sbin/ip6tables-nft"
 IPS="/sbin/ipset"
 NFT="/sbin/nft"
+SC="/sbin/sysctl"
 
 # SSH Port.
 # Ignore this if you don't use SSH.
@@ -18,57 +19,75 @@ SSH="22"
 # Default: 80
 HTTP="80"
 
-# Connection limit (per one IP)
-# Recommended: 100 connections
+# Connection limit
+# Default: 100 connections
 CL="100"
 
 # Connection limit action
-# Recommended: DROP
+# Default: DROP
 CLA="DROP"
 
-# UserAgent block action
-# Recommended: DROP
-# You should use WAF if you're under attack
-# Or if you're using HTTPS+HSTS
-UBA="DROP"
-
-# Proto block action
-# Recommended: DROP
-PBA="DROP"
-
 # IP Block action
-# Recommended: DROP
-# No need to change it without reason.
+# Default: DROP
 IBA="DROP"
 
-# SYN PPS limit (per IP)
-# Recommended: 5/s
+# SYN PPS limit
+# Default: 5/s
 SPL="5/s"
 
-# ACK PPS limit (per IP)
-# Recommended: 4900/s
-APL="4900/s"
-
-# SYN-ACK PPS limit (per IP)
-# Recommended: 5/s
+# SYN-ACK PPS limit
+# Default: 5/s
 SAPL="5/s"
 
-# ACK-PSH PPS limit (per IP)
-# Recommended: 1000/s
-APPL="1000/s"
-
-# RST PPS limit (per IP)
-# Recommended: 2/s
+# RST PPS limit
+# Default: 2/s
 RPL="2/s"
 
-# FIN PPS limit (per IP)
-# Recommended: 2/s
-FPL="2/s"
-
-# UDP PPS limit (per IP)
-# Recommended: 3000/s
+# UDP PPS limit
+# Default: 3000/s
 UPL="3000/s"
 
-# Color
-BYellow="\033[1;33m"
+# ICMP PPS limit
+# Default: 2/s
+IPL="2/s"
+
+# Hashtable size (buckets)
+# Default: 65536
+HTS="65536"
+
+# Hashtable max entries in the hash
+# Default: 65536
+HTM="65536"
+
+# Hashtable expire (ms)
+# Default: 5 minutes (300000 ms)
+HTE="300000"
+
+# MSS limit
+# Default: 536:65535
+MSS="536:65535"
+
+# Packet state filter
+# Default: INVALID
+# Add "UNTRACKED" for additional protection. But this may cause problems!
+ST="INVALID"
+
+# Limited UDP source ports (against amplification
+# Default: 19,53,123,111,123,137,389,1900,3702,5353
+LUSP="19,53,123,111,123,137,389,1900,3702,5353"
+
+# Invalid TCP Flag packet action
+# Default: DROP
+ITFPA="DROP"
+
+# Outgoing port-unreach limit
+# Default: 5/m
+OPL="5/m"
+
+# Outgoing TCP RST limit
+# Default: 10/s
+OTRL="10/s"
+
+# Colors
+BGray="\033[1;37m"
 BRed="\033[1;31m"

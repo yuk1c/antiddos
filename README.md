@@ -77,14 +77,13 @@ sudo netfilter-persistent save
 ### 🚩 Common issues/questions
 | ❃ Issue/Question  | ❃ Fix/Answer  |
 | ------------- |:------------------:|
-| Slow TCP Network Speed | Increase ACK and ACK-PSH Limit |
 | Slow UDP Network Speed | Increase UDP Limit |
 | Why script doesn't help me? | You have a slow server, or you're just under a Volumetric DDoS attack. You might try lower limits and optional rules (advanced ruleset). |
 | I allowed the needed port, but the service on it doesn't work. | Your service probably works on UDP. Try allowing port on UDP. |
 | Can I view the stats of the rules? | Yes, you can. Use the following command: sudo nft list ruleset. |
 | Does this script work with complicated routing? | Nah, it's not (by default). But to fix it, set rp_filter to 2. (sysctl tweaks) |
-| How can I start the script with automatic saving? | Use --autosave argument. |
+| How can I start the script with automatic ruleset saving? | Use --autosave argument. |
 | VPN Doesn't work... | Try to determine needed protocols and allow them in the script with -A or with -I If you want just apply the iptables command. Do not forget to save the changes! |
 | How to tune the script? | Check the config.sh, it contains some variables, if you have good knowledge, you can tune the config for your needs to mitigate attacks a bit better. |
 | I have other problems, what to do? | Open an issue or contact me via Telegram (@yuk1meow). |
-| Network doesn't work after I applied the script, what to do? | Restart your server and never use my script again on the same host. Because this is unfixable - caused by unknown for me problems. |
+| Network doesn't work after I applied the script, what to do? | After applying the script, if your network stops working, try restarting your server. Avoid using the script on the same host again, as the root cause of the issue is unknown and may persist. |

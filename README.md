@@ -87,3 +87,6 @@ sudo netfilter-persistent save
 | How to tune the script? | Check the config.sh, it contains some variables, if you have good knowledge, you can tune the config for your needs to mitigate attacks a bit better. |
 | I have other problems, what to do? | Open an issue or contact me via Telegram (@yuk1meow). |
 | Network doesn't work after I applied the script, what to do? | After applying the script, if your network stops working, try restarting your server. Avoid using the script on the same host again, as the root cause of the issue is unknown and may persist. |
+
+### 🗨 Telegram group:
+– [@yukiscript](https://t.me/yukiscript)

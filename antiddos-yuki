@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-# Script written to protect Linux servers.
-
-# For best results, install fail2ban.
+# Script is written to protect Linux servers.
 # Enjoy! Made by yuki with love <3.
-
-# You may try SYNProxy, but it's disables some features of the script.
 
 # --------------------------------
 
@@ -53,7 +49,7 @@ fi
 
 . config.sh
 
-# Flush all rules.
+# Flush all rules and add a 'filter' table.
  "$NFT" flush ruleset
  "$NFT" add table filter
 
@@ -66,7 +62,7 @@ fi
 
 # --------------------------------
 
-# Set input default policy to DROP.
+# Set default input policy to DROP.
 # Drop policy swiftly deals with any unwanted traffic.
  "$IP" -P INPUT DROP
 
@@ -135,6 +131,14 @@ fi
 # ----------------------------------------------------------------
  "$IP" -t raw -A PREROUTING -p udp -m multiport --sports "$LUSP" -m hashlimit --hashlimit-mode srcip,srcport --hashlimit-name Amplification-Limit --hashlimit-above 256/m -j DROP
 
+# Drop SYNs with src-port <1024 to prevent many attack types.
+# ----------------------------------------------------------------
+ "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN: Invalid Source Port" -j DROP
+
+# Drop packets with zero payloads.
+# ----------------------------------------------------------------
+ "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
+
 # Drop all invalid packets.
 # ----------------------------------------------------------------
  "$IP" -t mangle -I PREROUTING -p all -m conntrack --ctstate "$ST" -m comment --comment "Packet State Filter" -j DROP
@@ -143,11 +147,6 @@ fi
 # ----------------------------------------------------------------
  "$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" --connlimit-mask 32 -m comment --comment "Connection Limit" -j "$CLA"
 
-# Drop SYNs with src-port <1024 to prevent many attack types.
-# If you're trying to optimize the ruleset, you can comment this rule.
-# ----------------------------------------------------------------
- "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN: Invalid Source Port" -j DROP
-
 # Drop new non-SYN TCP packets to mitigate common TCP attacks.
 # If you're trying to optimize the ruleset, check this rule. It may affect performance.
 # ----------------------------------------------------------------
@@ -155,7 +154,7 @@ fi
 
 # Drop TCP packets with invalid MSS to mitigate certain attack types.
 # Try to set max MSS to 8960 if you wanna more stricter protection.
-# But then you'll need to modify rule and do this only for your NIC.
+# But then you'll need to modify the rule and do this only for your NIC.
 # ----------------------------------------------------------------
  "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss "$MSS" -m comment --comment "Invalid MSS" -j DROP
 
@@ -168,7 +167,7 @@ fi
  "$IP6" -t raw -A PREROUTING -m frag -j DROP
 
 # Block some multicast IPs, censys IPs, shodan IPs...
-# We use big hashsize, so it doesn't affects performance.
+# We use a big hash size, so it doesn't affect performance.
 # ----------------------------------------------------------------
 "$IPS" create blacklist nethash hashsize 260000 > /dev/null 2>&1
 while IFS= read -r bad_ip; do
@@ -176,66 +175,112 @@ while IFS= read -r bad_ip; do
 done <"./blacklist"
 "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA" > /dev/null 2>&1
 
-# Advanced FireWall ruleset.
+# Optional rules. We aren't providing any support for them.
 # ----------------------------------------------------------------
 
-# Block null payload.
- "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
+#################
+# Generic rules #
+#################
 
-# Better protection for HTTPS/HTTP server(s).
-# "$IP" -A INPUT -p tcp --dport 80 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
-# "$IP" -A INPUT -p tcp --dport 443 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
+# Filtering by TCP options.
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 1 -j DROP (NOP/RFC9293)
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 3 -j DROP (WinScale/RFC7372)
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 5 -j DROP (SACK/RFC2018)
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 8 -j DROP (Timestamps/RFC7323)
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 27 -j DROP (QuickStartResp/RFC7882)
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 34 -j DROP (TFO Cookie)
 
-# Block SIP server scanners.
-# "$IP" -A INPUT -p udp --dport 5060 -m string --string "sipvicious" --algo bm -j DROP
-# "$IP" -A INPUT -p udp --dport 5060 -m string --string "friendly-scanner" --algo bm -j DROP
+# Filtering by ECN bits.
+# BTW: These packets are also legitimate. (ece/cwr)
+# "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-ece -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-cwr -j DROP
 
-# Protect SMTP server against weird packets.
-# "$IP" -A INPUT -p tcp --dport 25 -m string --string "HELO" --algo bm --to 65535 -j DROP
-# "$IP" -A INPUT -p tcp --dport 25 -m string --string "EHLO" --algo bm --to 65535 -j DROP
-
-# Block torrents (useful against bittorrent amp).
-# "$IP" -A INPUT -m string --string "Torrent" --algo bm -j DROP
-
-# Block SSLv2 and SSLv3 connections.
-# "$IP" -A INPUT -p tcp --dport 443 -m string --string "SSLv2" --algo bm -j DROP
-# "$IP" -A INPUT -p tcp --dport 443 -m string --string "SSLv3" --algo bm -j DROP
-
-# Block HTTP TRACE method.
-# "$IP" -A INPUT -p tcp --dport 80 -m string --string "TRACE" --algo bm -j DROP
-
-# Block FTP SITE EXEC Command.
-# "$IP" -A INPUT -p tcp --dport 21 -m string --string "SITE EXEC" --algo bm -j DROP
-
-# Block SQLi attemps.
+# Drop SQL Injection attempts. These rules needs to be configured incase you want to use them.
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "union select" --algo bm -j DROP
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "information_schema" --algo bm -j DROP
 
-# Advanced AntiSpoofing [NOT RECOMMENDED].
-# "$IP" -A INPUT -p all ! -d <ip_of_your_server> -j DROP
+# Block HTTP 1.1 packets received on non-HTTP port(s). (common attack pattern)
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string ! --string "HTTP/1.1 OK" --algo kmp -j DROP
 
-# OpenVPN Whitelisting.
+# Block malformed DNS flood. (new DDoS methods)
+# "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --string "Refused" --algo bm -j DROP
+# "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --string "0000000000000000" --algo bm -j DROP
+# "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --hex-string "|3000300030003000300030003000300030003000300030003000|" --algo bm -j DROP
+
+# Prevent NTP Reflection attacks by blocking incoming NTP Reflection packets.
+# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
+
+# SYN and ACK Challenge.
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN SYN -j TCPMSS --clamp-mss-to-pmtu
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ACK -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL RST,ACK -j DROP
+
+# SourcePort;ProtocolFilter against some attacks.
+# "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string ! --string "DNS" --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p udp --sport 123 -m string ! --string "NTP" --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp --sport 80 -m string ! --string "HTTP" --algo kmp -j DROP
+
+# Patch some random attack.
+# "$IP" -t raw -A PReROUTING -p tcp --tcp-flags ALL SYN -m u32 --u32 "0>>22&0x3C@12>>26&0x3F=0" -j DROP
+
+# SYN/ACK Reflection block.
+# "$IP" -t mangle -A PREROUTING -p tcp --syn -m recent --name blacklist --set -j DROP
+# "$IP" -t mangle -A PREROUTING -p tcp --tcp-flags ALL SYN,ACK -m recent --name blacklist --rcheck --seconds 60 --hitcount 10 -j DROP
+
+# Drop ACK-PSH Packets without any data.
+# Shouldn't cause problems because these packets aren't legitimate.
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -m u32 --u32 "0>>22&0x3C@12=0" -j DROP
+
+# [BETA] Drop TFO (TCP Fast Open) Packets. (SYN with data)
+# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN SYN -m u32 --u32 "12&0xFFFF=0x0" -j DROP
+
+##################
+# OpenVPN Shield #
+##################
+
+# Whitelisting.
 # "$IP" -t raw -I PREROUTING -p <tcp/udp> --dport 1194 ! -s <trusted_ip> -j DROP
 
-# Block DNS zone transfers and recursion.
-# "$IP" -t raw -A PREROUTING -p udp --dport 53 -m string --string "recursion" --algo bm -j DROP
-# "$IP" -t raw -A PREROUTING -p tcp --dport 53 -m string --hex-string "|0d 0a 0d 0a|" --algo bm -j DROP
+# Application-layer filter. (UDP)
+# "$IP" -t mangle -A PREROUTING -p udp --dport 1194 --match bpf --bytecode "16,48 0 0 0,84 0 0 240,21 0 12 64,48 0 0 9,21 0 10 17,40 0 0 6,69 8 0 8191,177 0 0 0,80 0 0 8,21 0 5 56,64 0 0 17,21 0 3 1,72 0 0 4,21 0 1 62,6 0 0 65535,6 0 0 0" -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 1/second --hashlimit-burst 1 --hashlimit-mode srcip --hashlimit-name accept-openvpn -j ACCEPT
 
-# Port scan blocking.
-# "$IP" -t raw -A PREROUTING -m state --state NEW -p tcp --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s -j ACCEPT
-# "$IP" -t raw -A PREROUTING -m state --state NEW -p tcp --tcp-flags SYN,ACK,FIN,RST RST -j DROP
+# Conntrack entity (entry) count limiter.
+# "$IP" -t mangle -A PREROUTING -p udp --dport 1194 -m connlimit --connlimit-above 2 -j DROP
 
-# Geo blocking (in this rule, we block China, for example).
-# "$IP" -t raw -I PREROUTING -m geoip --src-cc CN -j DROP
+##############
+# SSH Shield #
+##############
 
-# Patch random attack, lol.
-# "$IP" -A INPUT -p tcp --tcp-flags ALL SYN -m u32 --u32 "0>>22&0x3C@12>>26&0x3F=0" -j DROP
+# Anti-socket method protection.
+# "$IP" -t mangle -A PREROUTING -p tcp --dport "$SSH" -m connlimit --connlimit-above 3 -j REJECT
 
-# SYNACK Reflection block.
-# "$IP" -A INPUT -p tcp --syn -m recent --name blacklist --set -j DROP
-# "$IP" -A INPUT -p tcp --tcp-flags ALL SYN,ACK -m recent --name blacklist --rcheck --seconds 60 --hitcount 10 -j DROP
+###############
+# HTTP Shield #
+###############
 
-# Advanced IP spoofing blocking + additional protection.
+# Connlimit-based protection for HTTP/HTTPS server(s).
+# "$IP" -A INPUT -p tcp --dport 80 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
+# "$IP" -A INPUT -p tcp --dport 443 -m connlimit --connlimit-above 20 --connlimit-mask 32 -j DROP
+
+# User-agent filtering.
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'python-requests' --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'benchmark' --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'MD5(' --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'censys' --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'inspect' --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'scanner' --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'shodan' --algo kmp -j DROP
+
+# Drop SSL packets.
+# "$IP" -A INPUT -p tcp --dport 443 -m string --string "SSL" --algo bm -j DROP
+
+# Drop "trace" HTTP method packets.
+# "$IP" -A INPUT -p tcp --dport 80 -m string --string "TRACE" --algo bm -j DROP
+
+######################
+# AntiSpoofing rules #
+######################
+
 # "$IP" -t raw -A PREROUTING -m ipv4options --option ssrr -j DROP
 # "$IP" -t raw -A PREROUTING -m ipv4options --option lsrr -j DROP
 # "$IP" -t raw -A PREROUTING -m ipv4options --option rr -j DROP
@@ -243,8 +288,33 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -m ipv4options --option security -j DROP
 # "$IP" -t raw -A PREROUTING -m hl --hl-eq 1 -j DROP
 
-# Prevent NTP Reflection attacks by blocking incoming NTP Reflection packets.
-# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
+# Advanced AntiSpoofing [NOT RECOMMENDED]
+# "$IP" -A INPUT -p all ! -d <ip_of_your_server> -j DROP
+
+###############
+# Other rules #
+###############
+
+# Drop SIP server scans.
+# "$IP" -A INPUT -p udp --dport 5060 -m string --string "sipvicious" --algo bm -j DROP
+# "$IP" -A INPUT -p udp --dport 5060 -m string --string "friendly-scanner" --algo bm -j DROP
+
+# Drop SMTP packets with malicious payload.
+# "$IP" -t raw -A PREROUTING -p tcp --dport 25 -m string --string "HELO" --algo bm --to 65535 -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp --dport 25 -m string --string "EHLO" --algo bm --to 65535 -j DROP
+
+# Drop packets of BitTorrent amplification.
+# "$IP" -t raw -A PREROUTING -m string --string "Torrent" --algo bm -j DROP
+
+# Drop FTP packets with malicious payload.
+# "$IP" -t raw -A PREROUTING -p tcp --dport 21 -m string --string "SITE EXEC" --algo bm -j DROP
+
+# Drop DNS recursion/zone transfer operations packets.
+# "$IP" -t raw -A PREROUTING -p udp --dport 53 -m string --string "recursion" --algo bm -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp --dport 53 -m string --hex-string "|0d 0a 0d 0a|" --algo bm -j DROP
+
+# Geo blocking (in this rule, we block China, for example).
+# "$IP" -t raw -I PREROUTING -m geoip --src-cc CN -j DROP
 
 # Enhance security by blocking known bypasses based on their specific patterns.
 # "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
@@ -259,15 +329,6 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
 
-# Enhance security by dropping HTTP requests with suspicious user agents.
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'python-requests' --algo kmp -j "$UBA"
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'benchmark' --algo kmp -j "$UBA"
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'MD5(' --algo kmp -j "$UBA"
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'censys' --algo kmp -j "$UBA"
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'inspect' --algo kmp -j "$UBA"
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'scanner' --algo kmp -j "$UBA"
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'shodan' --algo kmp -j "$UBA"
-
 # Drop packets with popular SNMP-based attack signatures to mitigate SNMP attacks.
 # "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
 
@@ -276,51 +337,23 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p udp --dport 53 -m udp -m string ! --string "DNS" --algo bm --to 65535 -j ACCEPT
 # "$IP" -t raw -A PREROUTING -p udp --dport 123 -m udp -m string ! --string "NTP" --algo bm --to 65535 -j ACCEPT
 
-# Block heartbleed attack.
+# Block heartbleed (1) / shellshock (2) attacks.
 # "$IP" -t raw -A PREROUTING -p tcp --dport 443 -m u32 --u32 "52=0x18030000 && 56=0x00000000" -j DROP
-
-# Block shellshock attack.
 # "$IP" -t raw -A PREROUTING -p tcp --dport 80 -m string --algo bm --string '() {' -j DROP
 
-# Extremely protect your SSH against handshake/socket methods.
-# "$IP" -t mangle -A PREROUTING -p tcp --dport "$SSH" -m connlimit --connlimit-above 3 -j REJECT
-
-# Proxy with iptables (example: redirect tcp packets from 25565 to your home 25500)
+# Proxy with iptables. (example: redirect TCP packets from 25565 to your home 25500)
 # "$IP" -t nat -A PREROUTING -i eth0 -p tcp --dport 25565 -j DNAT --to-destination your_home_ip:25500
 # "$IP" -t nat -A POSTROUTING -o eth0 -p tcp --dport 25565 -d your_home_ip -j SNAT --to-source your_server_ext_IP
 
-# OpenVPN Shield. Remove other rules that allow OpenVPN, to work properly.
-# "$IP" -A INPUT -p udp --dport 1194 --match bpf --bytecode "16,48 0 0 0,84 0 0 240,21 0 12 64,48 0 0 9,21 0 10 17,40 0 0 6,69 8 0 8191,177 0 0 0,80 0 0 8,21 0 5 56,64 0 0 17,21 0 3 1,72 0 0 4,21 0 1 62,6 0 0 65535,6 0 0 0" -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 1/second --hashlimit-burst 1 --hashlimit-mode srcip --hashlimit-name accept-openvpn -j ACCEPT
-
-# OpenVPN Shield.
-# "$IP" -A INPUT -p udp --dport 1194 -m connlimit --connlimit-above 2 -j DROP
-
 # Another patch against some weird attacks.
-# "$IP" -A INPUT -p icmp --icmp-type 3/4 -j DROP
-
-# [BETA] SYN and ACK Challenge.
-# "$IP" -A INPUT -p tcp --tcp-flags SYN SYN -j TCPMSS --clamp-mss-to-pmtu
-# "$IP" -A INPUT -p tcp --tcp-flags ALL ACK -j DROP
-# "$IP" -A INPUT -p tcp --tcp-flags ALL RST,ACK -j DROP
-
-# [BETA] SourcePort;ProtocolFilter against some DDoS attacks.
-# "$IP" -A INPUT -p udp --sport 53 -m string ! --string "DNS" --algo kmp -j DROP
-# "$IP" -A INPUT -p udp --sport 123 -m string ! --string "NTP" --algo kmp -j DROP
-# "$IP" -A INPUT -p tcp --sport 80 -m string ! --string "HTTP" --algo kmp -j DROP
+# "$IP" -t raw -A PREROUTING -p icmp --icmp-type 3/4 -j DROP
 
 # Block all protocols except TCP.
 # VERY Not recommended! Shouldn't be used always.
 # "$IP" -A INPUT ! -p tcp -j DROP
 
 # [BETA] Arptables ARP Flood patch.
-# arptables -A INPUT --limit-rate 10/s --limit-burst 20 -j ACCEPT
-
-# Patch new UDP Methods (Malformed DNS).
-# "$IP" -t raw -A PREROUTING -p udp -m string --string "0000000000000000" --algo bm -j DROP
-# "$IP" -t raw -A PREROUTING -p udp -m string --hex-string "|3000300030003000300030003000300030003000300030003000|" --algo bm -j DROP
-
-# Block HTTP 1.1 sent not to HTTP port. (common attack pattern)
-# "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string ! --string "HTTP/1.1 OK" --algo kmp -j DROP
+# arptables -A INPUT --limit-rate 3/s --limit-burst 20 -j ACCEPT
 
 # [BETA] TCP Ratelimit (All flags).
 # Using this rule may make other TCP rate limits redundant or conflicting. Evaluate your rule set accordingly.
@@ -329,7 +362,7 @@ done <"./blacklist"
 # Block some unusual attacks by blocking zero TTL.
 # "$IP" -t raw -A PREROUTING -m ttl --ttl-eq 0 -j DROP
 
-# Block source-ports 0, 1 because they're don't serve a legitimate purpose.
+# Block source-ports 0, 1 because they don't serve a legitimate purpose.
 # "$IP" -t raw -A PREROUTING -p all -m multiport --sports 0,1 -j DROP
 
 # ACK & ACK-PSH Limits (against most TCP bypasses).
@@ -337,28 +370,16 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m hashlimit --hashlimit-mode srcip --hashlimit-name ackflood --hashlimit-above 1000/s --hashlimit-burst 2 -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH -m hashlimit --hashlimit-mode srcip --hashlimit-name ackpshflood --hashlimit-above 1000/s --hashlimit-burst 2 -j DROP
 
-# Block STUN by dport or string. You can combine it to one rule or use together.
+# Block STUN by dport or string. You can combine them into one rule or use them together.
 # "$IP" -t raw -A PREROUTING -p udp --sport 3478 -j DROP
 # "$IP" -t raw -A PREROUTING -p udp -m string --string "STUN" --algo kmp -j DROP
-
-# Filtering by tcp options
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 1 -j DROP (NOP/RFC9293)
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 2 -j DROP (MSS/RFC9293)
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 3 -j DROP (WinScale/RFC7372)
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 5 -j DROP (SACK/RFC2018)
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 8 -j DROP (Timestamps/RFC7323)
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 27 -j DROP (QuickStartResp/RFC7882)
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-option 34 -j DROP (TFO Cookie)
-
-# Block malformed DNS flood
-# "$IP" -t raw -A PREROUTING -p udp -m string --string "Refused" --algo bm -j DROP
 
 # Limit connection establishing speed (per source IP) (we don't use --rsource because it is already set by default)
 # Limiting upto 30 SYN_RECV per 5s from each new IP
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --set
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --update --rcheck --rttl --seconds 5 --hitcount 30 
 
-# Filtering by addr type (wasn't tested)
+# Filtering by address type (wasn't tested)
 # Currently, this rule drops packets from unreachable sources.
 # "$IP" -t raw -A PREROUTING -m addrtype --src-type UNREACHABLE -j DROP
 
@@ -366,11 +387,11 @@ done <"./blacklist"
 # Drops the packet if it has no known conntrack status
 # "$IP" -t mangle -A PREROUTING -p all -m conntrack --ctstatus NONE -j DROP
 
-# Filtering by ECN bits
-# "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-cwr -j DROP
-# "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-ece -j DROP
-
 # --------------------------------
+
+###############
+#   Logging   #
+###############
 
 # If you want to enable logging to dmesg, uncomment the following first rule:
 
@@ -430,7 +451,7 @@ echo -e "
  net.ipv4.tcp_synack_retries = 1
  net.ipv4.tcp_syn_retries = 2
 
-# Set custom NIC Buffers size.
+# Set custom NIC rmem/wmem buffer size.
 # --------------------------------
  net.core.rmem_max = 33554432
  net.core.wmem_max = 33554432
@@ -485,7 +506,7 @@ echo -e "
  #kernel.sysrq = 0 # Disables sysrq (not recommended)
 
 # Performance tuning.
-# Set somaxconn to 3240000 if you have very powerful server.
+# Set somaxconn to 3240000 if you have a very powerful server.
 # Your server would then manage over 3 million connections. 0_0
 # Additionally, you can activate commented-out settings at the end (in this scenario).
 # Disabled checksum verification in NF because the NIC usually already calculates checksums.
@@ -560,4 +581,4 @@ fi
 tput sgr0
 exit 0
 
-# Wanna delete rule? Replace -A (or -I) with -D and apply!
+# if you want to delete a rule - replace -A (or -I) with -D and apply!

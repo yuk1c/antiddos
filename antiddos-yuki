@@ -51,14 +51,14 @@ fi
 
 # Flush all rules and add a 'filter' table.
  "$NFT" flush ruleset
- "$NFT" add table filter
+ "$NFT" add table filter > /dev/null 2>&1 &
 
 # Delete the "blacklist" ip set.
- "$IPS" destroy blacklist
+ "$IPS" destroy blacklist > /dev/null 2>&1 &
 
 # Backup sysctl.conf.
 # It's located in /etc.
- cp /etc/sysctl.conf{,.backup}
+ cp /etc/sysctl.conf{,.backup} > /dev/null 2>&1 &
 
 # --------------------------------
 
@@ -89,18 +89,40 @@ fi
 # Mitigate some TCP Floods with hashlimits.
 # You can try to set srcmask lower than /32.
 # It will limit not only the source-IP, but also IPs from the netmask.
+# Also, you can configure dstmask to protect your IP neighbors.
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p tcp --syn -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 --hashlimit-name synflood --hashlimit-above "$SPL" -m comment --comment "SYN Flood" --hashlimit-htable-expire "$HTE" --hashlimit-htable-size "$HTS" --hashlimit-htable-max "$HTM" -j DROP
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 --hashlimit-name synackflood --hashlimit-above "$SAPL" --hashlimit-burst 2 --hashlimit-htable-expire "$HTE" --hashlimit-htable-size "$HTS" --hashlimit-htable-max "$HTM" -j DROP
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 --hashlimit-name rstflood --hashlimit-above "$RPL" --hashlimit-burst 2 --hashlimit-htable-expire "$HTE" --hashlimit-htable-size "$HTS" --hashlimit-htable-max "$HTM" -j DROP
+ "$IP" -t raw -A PREROUTING -p tcp --syn \
+  -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 \
+  --hashlimit-dstmask 32 --hashlimit-name synflood \
+  --hashlimit-above "$SPL" --hashlimit-htable-expire "$HTE" \
+  --hashlimit-htable-size "$HTS" --hashlimit-htable-max "$HTM" -j DROP
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK \
+  -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 \
+  --hashlimit-dstmask 32 --hashlimit-name synackflood \
+  --hashlimit-above "$SAPL" --hashlimit-burst 2 \
+  --hashlimit-htable-expire "$HTE" --hashlimit-htable-size "$HTS" \
+  --hashlimit-htable-max "$HTM" -j DROP
+ "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST \
+  -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 \
+  --hashlimit-dstmask 32 --hashlimit-name rstflood \
+  --hashlimit-above "$RPL" --hashlimit-burst 2 --hashlimit-htable-expire "$HTE" \
+  --hashlimit-htable-size "$HTS" --hashlimit-htable-max "$HTM" -j DROP
 
 # Mitigate UDP Floods with hashlimit.
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p udp -m hashlimit --hashlimit-above "$UPL" --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 --hashlimit-name udp-flood-limit --hashlimit-burst "$UPL" --hashlimit-htable-size "$HTS" --hashlimit-htable-max 65536 --hashlimit-htable-expire "$HTE" -j DROP
+ "$IP" -t raw -A PREROUTING -p udp -m hashlimit --hashlimit-above "$UPL" \
+  --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 \
+  --hashlimit-name udp-flood-limit --hashlimit-burst "$UPL" \
+  --hashlimit-htable-size "$HTS" --hashlimit-htable-max 65536 \
+  --hashlimit-htable-expire "$HTE" -j DROP
 
 # Mitigate ICMP Floods with hashlimits. Also, block some ICMP types for enhanced security.
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p icmp -m comment --comment "ICMP hashlimit" -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 --hashlimit-name icmp-limit --hashlimit-above "$IPL" --hashlimit-burst 2 --hashlimit-htable-size "$HTS" --hashlimit-htable-max 65536 --hashlimit-htable-expire "$HTE" -j DROP
+ "$IP" -t raw -A PREROUTING -p icmp -m comment --comment "ICMP hashlimit" -m hashlimit \
+  --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 \
+  --hashlimit-name icmp-limit --hashlimit-above "$IPL" --hashlimit-burst 2 \
+  --hashlimit-htable-size "$HTS" --hashlimit-htable-max 65536 \
+  --hashlimit-htable-expire "$HTE" -j DROP
  "$IP" -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP
  "$IP" -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP
  "$IP" -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP
@@ -129,7 +151,9 @@ fi
 
 # Safeguard against CPU overload during AMP DDoS attacks by limiting DNS/NTP packets per second (PPS).
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p udp -m multiport --sports "$LUSP" -m hashlimit --hashlimit-mode srcip,srcport --hashlimit-name Amplification-Limit --hashlimit-above 256/m -j DROP
+ "$IP" -t raw -A PREROUTING -p udp -m multiport --sports "$LUSP" -m hashlimit \
+  --hashlimit-mode srcip,srcport --hashlimit-name Amplification-Limit \
+  --hashlimit-above 256/m -j DROP
 
 # Drop SYNs with src-port <1024 to prevent many attack types.
 # ----------------------------------------------------------------
@@ -145,7 +169,8 @@ fi
 
 # Restrict the number of connections per IP to mitigate the impact of Handshake and Slowloris attacks.
 # ----------------------------------------------------------------
- "$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" --connlimit-mask 32 -m comment --comment "Connection Limit" -j "$CLA"
+ "$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" --connlimit-mask 32 \
+  -m comment --comment "Connection Limit" -j "$CLA"
 
 # Drop new non-SYN TCP packets to mitigate common TCP attacks.
 # If you're trying to optimize the ruleset, check this rule. It may affect performance.
@@ -559,26 +584,22 @@ systemctl enable --now netfilter-persistent > /dev/null 2>&1 &
 clear
 
 if [ "$autosave" = true ]; then
-	netfilter-persistent save
-	clear
-	print_success "All script changes were applied. No action required."
-	echo -e "${BGray}"
-	echo -e "\nThe 'Drop' policy blocks all incoming traffic that is not explicitly allowed (SSH is already allowed)."
-	echo -e "To allow a specific TCP port, use: 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'"
-	echo -e "For UDP ports, you can use: 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'"
-	echo -e "You can also check the current firewall rules and statistics with: 'nft list ruleset'"
+ netfilter-persistent save > /dev/null 2>&1 clear
+ message="All script changes were applied. No action required."
 else
-	print_success "Script changes applied, but rules aren't saved."
-	echo -e "${BGray}"
-	echo -e "Please check the network status now. If everything is working correctly, save the rules using 'sudo netfilter-persistent save'."
-	echo -e "\nThe 'Drop' policy blocks all incoming traffic that is not explicitly allowed (SSH is already allowed)."
-	echo -e "To allow a specific TCP port, use: 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'"
-	echo -e "For UDP ports, you can use: 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'"
-	echo -e "You can also check the current firewall rules and statistics with: 'nft list ruleset'"
+ message="Script changes applied, but rules aren't saved.\
+ Check the network now: If it works OK, do 'sudo netfilter-persistent save'."
 fi
+
+print_success "$message"
+echo -e "${BGray}"
+echo -e "The 'Drop' policy blocks all incoming traffic that isn't explicitly allowed (SSH is already allowed).
+To allow a specific TCP port, use: 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'
+For UDP ports, use: 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'
+You can also check the current rules and their statistics with: 'nft list ruleset'"
 
 # Reset terminal color and exit.
 tput sgr0
 exit 0
 
-# if you want to delete a rule - replace -A (or -I) with -D and apply!
+# if you want to delete a rule - replace -A (or -I) with -D and apply.

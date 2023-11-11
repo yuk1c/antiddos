@@ -14,7 +14,7 @@ apt update && apt install iptables ipset netfilter-persistent ipset-persistent n
 ### 📋 Requirements
 - Bash
 - Ubuntu 20.04+ / [BETA] Debian 11+
-###### Requirements for optional (advanced) rules: ebtables, arptables
+###### Requirements for optional (advanced) rules: ebtables, arptables, xtables-addons-common (it is needed for antiSpoof rules)
 <hr>
 
 ### ⛔ Blocked/patched attack types:

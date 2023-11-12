@@ -8,41 +8,156 @@
 
 print_success() {
 	if command -v lolcat &>/dev/null; then
-		echo -e "[✓] Success. $1" | lolcat
+		echo -e "✓ Success. $1" | lolcat
 	else
-		echo -e "${BGray}[✓] Success. $1"
+		echo -e "${BGray}✓ Success. $1"
 	fi
 }
 
 print_error() {
 	if command -v lolcat &>/dev/null; then
-		echo -e "[✗] Fail. $1" | lolcat
+		echo -e "✗ Fail. $1" | lolcat
 	else
-		echo -e "${BRed}[✗] Fail. $1"
+		echo -e "${BRed}✗ Fail. $1"
+	fi
+}
+
+print_default() {
+	if command -v lolcat &>/dev/null; then
+		echo -e "$1" | lolcat
+	else
+		echo -e "${BGray}$1"
 	fi
 }
 
 # ----------------------------------
 
-# RootCheck.
+# Verify whether the script is running with root privileges.
 
 if [[ $EUID -ne 0 ]]; then
 	print_error "The script must be run as root."
 	exit 1
 fi
 
-# --------------------------------
+# Distribution check.
 
-# Parse command line arguments.
+# Check for the --skip_distro_check argument.
+if [ "$1" != "--skip-distro-check" ]; then
+    # Check the distribution
+    if command -v lsb_release > /dev/null 2>&1; then
+        distro=$(lsb_release -is)
+    elif [ -e /etc/os-release ]; then
+        distro=$(awk -F= '/^ID=/{print tolower($2)}' /etc/os-release)
+    else
+        print_error "Failed to determine the distribution. Make sure lsb-release is installed or /etc/os-release is accessible."
+        exit 1
+    fi
+    
+    case "$distro" in
+        "Ubuntu" | "Debian")
+            # The distribution is supported, no output.
+            ;;
+        *)
+            print_error "Your distribution ($distro) is not supported. If you're sure this is an error, use --skip-distro-check and report it by opening an issue on GitHub."
+            exit 1
+            ;;
+    esac
+fi
 
-if [ "$#" -eq 1 ] && [ "$1" == "--autosave" ]; then
-	autosave=true
-else
-	if [ "$#" -ne 0 ]; then
-		# Show error if detected wrong args.
-		print_error 'Invalid arguments. Try without them. If you wanted auto-save, then use --autosave.'
-		exit 1
-	fi
+# Check if all dependencies are installed.
+
+dependencies=("iptables" "nftables" "ipset" "netfilter-persistent" "git")
+missing_dependencies=()
+
+for dependency in "${dependencies[@]}"; do
+    if ! dpkg-query -W -f='${Status}' "$dependency" 2>/dev/null | grep -q "install ok installed"; then
+        missing_dependencies+=("$dependency")
+    fi
+done
+
+if [ "${#missing_dependencies[@]}" -gt 0 ]; then
+    print_error "Not all dependencies are installed. Please run the following command to fix that:"
+    echo "sudo apt install ${missing_dependencies[*]} -y"
+    exit 1
+fi
+
+# Various checks of the config file.
+
+CONFIG_FILE="config.sh"
+GITHUB_REPO="https://raw.githubusercontent.com/yuk1c/antiddos/master"
+
+# Check if config file exists.
+if [ ! -f "$CONFIG_FILE" ]; then
+    print_error "No config file found. Downloading it from GitHub..."
+    
+    # Download the config file from GitHub
+    if wget -q "$GITHUB_REPO/$CONFIG_FILE" -O "$CONFIG_FILE"; then
+        echo "Config file was downloaded successfully."
+    else
+        print_error "Unable to load config file from GitHub. Please check your internet connectivity and GitHub availability."
+        exit 1
+    fi
+fi
+
+# Check if config file is readable.
+if [ ! -r "$CONFIG_FILE" ]; then
+    print_error "$CONFIG_FILE is not readable. Please check file permissions."
+    exit 1
+fi
+
+# Check if config file is not empty.
+if [ ! -s "$CONFIG_FILE" ]; then
+    print_error "$CONFIG_FILE is empty. Please provide configuration settings in the file."
+    exit 1
+fi
+
+# Parse script arguments.
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --skip-update-check) SKIP_UPDATE_CHECK=true; shift ;;
+        *) print_error "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+done
+
+# Store the script's directory.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# If --skip_update_check is not present, check for updates.
+if [ "$SKIP_UPDATE_CHECK" != "true" ]; then
+    # Go to the script's directory
+    cd "$SCRIPT_DIR"
+
+    # Fetch updates from the remote repository.
+    git fetch
+
+    # Compare local branch with the remote branch.
+    if [ "$(git rev-parse HEAD)" != "$(git rev-parse @{u})" ]; then
+        print_default "Updates available. Do you want to upgrade the script to continue? (y/n)"
+        
+        read -r response
+        case "$response" in
+            [yY])
+                # Attempt to pull updates, handle errors quietly
+                if ! git pull -q origin main; then
+                    print_error "Unable to update script. You can skip the update check with the '--skip-update-check' argument if you think this is an mistake."
+                    exit 1
+                fi
+
+                print_success "Script updated. Restarting..."
+                exec "$SCRIPT_DIR/$(basename "$0")" "$@"  # Restart the updated script with the original arguments
+                exit 0  # Make sure to exit after the exec command
+                ;;
+
+            [nN])
+                print_default "You chose not to upgrade. You can skip the update check with the '--skip-update-check' argument."
+                exit 1
+                ;;
+            *)
+                print_error "Incorrect answer."
+                exit 1
+                ;;
+        esac
+    fi
 fi
 
 # --------------------------------
@@ -75,8 +190,7 @@ fi
 # Allow SSH. You can implement whitelisting in here.
  "$IP" -A INPUT -p tcp --dport "$SSH" -j ACCEPT
 
-# Allow some required protocols.
- "$IP" -A INPUT -p tcp -j ACCEPT
+# Allow some protocols. This is optional, but may be needed in some cases.
 # "$IP" -A INPUT -p mptcp -j ACCEPT - If you need mptcp
 # "$IP" -A INPUT -p igmp -j ACCEPT  - If you need igmp
 # "$IP" -A INPUT -p gre -j ACCEPT   - If you need gre
@@ -216,11 +330,11 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-option 34 -j DROP (TFO Cookie)
 
 # Filtering by ECN bits.
-# BTW: These packets are also legitimate. (ece/cwr)
+# Note: These packets are also legitimate. (ece/cwr)
 # "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-ece -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-cwr -j DROP
 
-# Drop SQL Injection attempts. These rules needs to be configured incase you want to use them.
+# Drop SQL Injection attempts. These rules needs to be configured in case you want to use them.
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "union select" --algo bm -j DROP
 # "$IP" -A INPUT -p tcp --dport 3306 -m string --string "information_schema" --algo bm -j DROP
 
@@ -241,6 +355,7 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL RST,ACK -j DROP
 
 # SourcePort;ProtocolFilter against some attacks.
+# The last rule may cause problems with apt.
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string ! --string "DNS" --algo kmp -j DROP
 # "$IP" -t raw -A PREROUTING -p udp --sport 123 -m string ! --string "NTP" --algo kmp -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --sport 80 -m string ! --string "HTTP" --algo kmp -j DROP
@@ -258,6 +373,12 @@ done <"./blacklist"
 
 # [BETA] Drop TFO (TCP Fast Open) Packets. (SYN with data)
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN SYN -m u32 --u32 "12&0xFFFF=0x0" -j DROP
+
+# Length filter. Allows only packets with correct length.
+# Max is 1500, you may have 9000 MTU - in this case you should set 9000 as a max value.
+# "$IP" -t raw -A PREROUTING -p tcp -m length ! --length 40:1500 -j DROP
+# "$IP" -t raw -A PREROUTING -p udp -m length ! --length 20:1500 -j DROP
+# "$IP" -t raw -A PREROUTING -p icmp -m length ! --length 64:72 -j DROP
 
 ##################
 # OpenVPN Shield #
@@ -306,12 +427,11 @@ done <"./blacklist"
 # AntiSpoofing rules #
 ######################
 
-# "$IP" -t raw -A PREROUTING -m ipv4options --option ssrr -j DROP
-# "$IP" -t raw -A PREROUTING -m ipv4options --option lsrr -j DROP
-# "$IP" -t raw -A PREROUTING -m ipv4options --option rr -j DROP
-# "$IP" -t raw -A PREROUTING -m ipv4options --option nop -j DROP
-# "$IP" -t raw -A PREROUTING -m ipv4options --option security -j DROP
-# "$IP" -t raw -A PREROUTING -m hl --hl-eq 1 -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --ssrr -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --lsrr -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --rr -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --ts -j DROP
+# "$IP" -t raw -A PREROUTING -m ipv4options --ra -j DROP
 
 # Advanced AntiSpoofing [NOT RECOMMENDED]
 # "$IP" -A INPUT -p all ! -d <ip_of_your_server> -j DROP
@@ -341,22 +461,6 @@ done <"./blacklist"
 # Geo blocking (in this rule, we block China, for example).
 # "$IP" -t raw -I PREROUTING -m geoip --src-cc CN -j DROP
 
-# Enhance security by blocking known bypasses based on their specific patterns.
-# "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|7374640000000000|" --algo kmp --from 28 --to 29 -j DROP
-# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "6&0xFF=0,2:5,7:16,18:255" -j DROP
-# "$IP" -t raw -A PREROUTING -m u32 --u32 "12&0xFFFF=0xFFFF" -j DROP
-# "$IP" -t raw -A PREROUTING -m u32 --u32 "28&0x00000FF0=0xFEDFFFFF" -j DROP
-# "$IP" -t raw -A PREROUTING -m string --algo bm --from 28 --to 29 --string "farewell" -j DROP
-# "$IP" -t raw -A PREROUTING -p udp -m udp -m string --hex-string "|53414d50|" --algo kmp --from 28 --to 29 -j DROP
-
-# Enhance security by blocking signatures of popular Command and Control (C2) sources.
-# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "2&0xFFFF=0x2:0x0100" -j DROP
-# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "12&0xFFFFFF00=0xC0A80F00" -j DROP
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m length --length 52 -m string --algo bm --string "0x912e" -m state --state ESTABLISHED -j DROP
-
-# Drop packets with popular SNMP-based attack signatures to mitigate SNMP attacks.
-# "$IP" -t raw -A PREROUTING -p udp --sport 161 -m length --length 2536:1244 -j DROP
-
 # Drop packets sent to DNS/NTP port but which are not DNS/NTP packets.
 # You can make multiple rules like that.
 # "$IP" -t raw -A PREROUTING -p udp --dport 53 -m udp -m string ! --string "DNS" --algo bm --to 65535 -j ACCEPT
@@ -380,36 +484,40 @@ done <"./blacklist"
 # [BETA] Arptables ARP Flood patch.
 # arptables -A INPUT --limit-rate 3/s --limit-burst 20 -j ACCEPT
 
-# [BETA] TCP Ratelimit (All flags).
-# Using this rule may make other TCP rate limits redundant or conflicting. Evaluate your rule set accordingly.
+# TCP Ratelimit (All flags).
+# Using this rule may make other TCP rate limits redundant or conflicting. Evaluate your ruleset accordingly.
 # "$IP" -t raw -A PREROUTING -p tcp -m hashlimit --hashlimit-name tcp --hashlimit-mode srcip --hashlimit --hashlimit-above 10000/s -j DROP
 
 # Block some unusual attacks by blocking zero TTL.
 # "$IP" -t raw -A PREROUTING -m ttl --ttl-eq 0 -j DROP
 
 # Block source-ports 0, 1 because they don't serve a legitimate purpose.
-# "$IP" -t raw -A PREROUTING -p all -m multiport --sports 0,1 -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp -m multiport --sports 0,1 -j DROP
+# "$IP" -t raw -A PREROUTING -p udp -m multiport --sports 0,1 -j DROP
 
 # ACK & ACK-PSH Limits (against most TCP bypasses).
 # Please note that these rules can impact legitimate traffic due to their strict nature.
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m hashlimit --hashlimit-mode srcip --hashlimit-name ackflood --hashlimit-above 1000/s --hashlimit-burst 2 -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH -m hashlimit --hashlimit-mode srcip --hashlimit-name ackpshflood --hashlimit-above 1000/s --hashlimit-burst 2 -j DROP
 
-# Block STUN by dport or string. You can combine them into one rule or use them together.
+# Block STUN by sport or string. You can combine them into one rule or use together.
 # "$IP" -t raw -A PREROUTING -p udp --sport 3478 -j DROP
 # "$IP" -t raw -A PREROUTING -p udp -m string --string "STUN" --algo kmp -j DROP
 
-# Limit connection establishing speed (per source IP) (we don't use --rsource because it is already set by default)
-# Limiting upto 30 SYN_RECV per 5s from each new IP
+# Limit connection establishing speed. (per source IP) (we don't use --rsource because it is already set by default)
+# Limiting upto 30 SYN_RECV per 5s from each new IP.
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --set
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --update --rcheck --rttl --seconds 5 --hitcount 30 
 
-# Filtering by address type (wasn't tested)
-# Currently, this rule drops packets from unreachable sources.
-# "$IP" -t raw -A PREROUTING -m addrtype --src-type UNREACHABLE -j DROP
+# Filtering by source IP address routing type.
+# It wasn't tested a lot and may do nothing.
+# "$IP" -t mangle -A PREROUTING -m addrtype --src-type UNREACHABLE -j DROP
+# "$IP" -t mangle -A PREROUTING -m addrtype --src-type BLACKHOLE -j DROP
+# "$IP" -t mangle -A PREROUTING -m addrtype --src-type MULTICAST -j DROP
+# "$IP" -t mangle -A PREROUTING -m addrtype --src-type THROW -j DROP
 
-# Filtering by conntrack status
-# Drops the packet if it has no known conntrack status
+# Filtering by conntrack status.
+# Drops the packet if it has no known conntrack status.
 # "$IP" -t mangle -A PREROUTING -p all -m conntrack --ctstatus NONE -j DROP
 
 # --------------------------------
@@ -443,8 +551,7 @@ echo -e "
 #
 
 
-# Set custom Netfilter CT timeouts.
-# Helps in TCP DDoS mitigation.
+# Custom conntrack timeouts - specially against DDoS attacks.
 # --------------------------------
  net.netfilter.nf_conntrack_tcp_timeout_last_ack = 10
  net.netfilter.nf_conntrack_tcp_timeout_close = 5
@@ -465,25 +572,20 @@ echo -e "
 # you can set the value to '2' here.
 # Caution: certain hosting providers might block syncookies.
 # Verify if your hoster enforces this. If yes, set it to '0'.
-# Retaining the protective measure.
 # --------------------------------
  net.ipv4.tcp_syncookies = 1
 
 # Set custom SYN/SYN-ACK retries count.
 # Helps in TCP DDoS mitigation.
-# Try 1/1 instead of 1/2 if you have time for testing :)
+# Try 1/1 instead of 2/2 if you have time for testing :)
 # --------------------------------
- net.ipv4.tcp_synack_retries = 1
+ net.ipv4.tcp_synack_retries = 2
  net.ipv4.tcp_syn_retries = 2
 
 # Set custom NIC rmem/wmem buffer size.
 # --------------------------------
  net.core.rmem_max = 33554432
  net.core.wmem_max = 33554432
-
-# Use TCP MTU Probing when the kernel detects ICMP Blackhole.
-# --------------------------------
- net.ipv4.tcp_mtu_probing = 1
 
 # Network security hardening.
 # Usually causes problems on routers.
@@ -501,8 +603,8 @@ echo -e "
  net.ipv6.conf.all.drop_unicast_in_l2_multicast = 1
  net.ipv6.conf.default.dad_transmits = 0
  net.ipv6.conf.default.autoconf = 0
- #net.ipv4.ip_forward = 0 # Disables ip_forward (blocks VPN/NAT)
- #net.ipv4.ip_no_pmtu_disc = 3 # Hardened PMTU Discover Mode (usually not needed)
+ # net.ipv4.ip_forward = 0 # Disables ip_forward (blocks VPNs/NATs)
+ # net.ipv4.ip_no_pmtu_disc = 3 # Hardened PMTU Discover Mode (usually not needed)
 
 # Prevent ARP Spoofing.
 # --------------------------------
@@ -534,7 +636,7 @@ echo -e "
 # Set somaxconn to 3240000 if you have a very powerful server.
 # Your server would then manage over 3 million connections. 0_0
 # Additionally, you can activate commented-out settings at the end (in this scenario).
-# Disabled checksum verification in NF because the NIC usually already calculates checksums.
+# We've also disabled checksum verification in NF because the NIC usually already calculates checksums.
 # --------------------------------
  kernel.sched_tunable_scaling = 1
  kernel.shmmax = 268435456

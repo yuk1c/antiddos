@@ -1,7 +1,7 @@
 #################
 # CONFIGURATION #
 #################
-#
+
 # Binary routes.
 IP="/sbin/iptables-nft"
 IP6="/sbin/ip6tables-nft"
@@ -9,19 +9,28 @@ IPS="/sbin/ipset"
 NFT="/sbin/nft"
 SC="/sbin/sysctl"
 
-# SSH Port.
-# Ignore this if you don't use SSH.
+# For working with sysctl.conf
+sysctl_conf="/etc/sysctl.conf"
+backup_dir="/etc/sysctl_backups"
+num_backups=$(find "$backup_dir" -maxdepth 1 -type f | wc -l)
+max_backups=5
+timestamp=$(date "+%Y%m%d%H%M%S")
+backup_file="$backup_dir/sysctl.conf_$timestamp"
+
+# SSH server Port.
+# Ignore this if you don't use/don't have an SSH server.
 # Default: 22 (ssh)
 SSH="22"
 
 # All ports of running webservers.
 # Ignore this if you don't have them.
+# If you wanna add a port, it should look like "80,443,8080".
 # Default: 80
 HTTP="80"
 
 # Connection limit
-# Default: 100 connections
-CL="100"
+# Default: 50 connections
+CL="50"
 
 # Connection limit action
 # Default: DROP

@@ -6,23 +6,8 @@
 
 # Functions.
 
-print_success() {
-	if command -v lolcat &>/dev/null; then
-		echo -e "✓ Success. $1" | lolcat
-	else
-		echo -e "${BGray}✓ Success. $1"
-	fi
-}
-
-print_error() {
-	if command -v lolcat &>/dev/null; then
-		echo -e "✗ Fail. $1" | lolcat
-	else
-		echo -e "${BRed}✗ Fail. $1"
-	fi
-}
-
 print_default() {
+    # For printing gradient messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
 		echo -e "$1" | lolcat
 	else
@@ -30,14 +15,85 @@ print_default() {
 	fi
 }
 
+print_default2() {
+    # For printing gray messages.
+    echo -e "${BGray}$1"
+}
+
+print_success() {
+    # For printing gradient success messages with auto-fallback.
+	if command -v lolcat &>/dev/null; then
+		echo -e "✓ Success. $1" | lolcat
+	else
+		echo -e "${BGray}✓ Success. $1"
+	fi
+}
+
+print_warning () {
+    # For printing gradient warning messages with auto-fallback.
+    if command -v lolcat &>/dev/null; then
+        echo -e "⚠︎ Warning: $1" | lolcat >&2
+    else
+        echo -e "${BGray}⚠︎ Warning: $1" >&2
+    fi
+}
+
+print_error() {
+    # For printing gradient error messages with auto-fallback.
+	if command -v lolcat &>/dev/null; then
+		echo -e "✗ Fail. $1" | lolcat >&2
+	else
+		echo -e "${BRed}✗ Fail. $1" >&2
+	fi
+}
+
+rootcheck() {
+    if [[ $EUID -ne 0 ]]; then
+        print_warning "This script must be run as root. Restarting with sudo/su..."
+
+        if command -v sudo &> /dev/null; then
+            print_default2 "Automatic choice: 'sudo' was selected and will be used."
+            # shellcheck disable=SC2128
+            sudo -E "$SHELL" "$BASH_SOURCE" "$@"
+            exit $?
+        elif command -v su &> /dev/null; then
+            print_default2 "Automatic choice: 'su' was selected and will be used."
+            # shellcheck disable=SC2128
+            script_path="$(readlink -f "$BASH_SOURCE")"
+            su -c "$script_path" "$@"
+            exit $?
+        else
+            print_error "Automatic choice failed: neither sudo nor su was found. Exiting."
+            exit 1
+        fi
+    fi
+}
+
+accidental_start_prevention() {
+    print_default "Accidental start prevention: press 'enter' within 5 seconds to continue, CTRL+C to cancel."
+
+    for counter in {1..5}; do
+        if IFS= read -rt 1 -N 1 key; then
+            case $key in
+                $'\n') print_success "Starting the script..." && return ;;
+                $'\x03') print_default2 "Ctrl+C detected. Exiting..." && exit 130 ;;
+            esac
+        fi
+    done
+
+    print_default2 "\nNo response within 5 seconds. Exiting..."
+    exit 0
+}
+
+cleanup() {
+    print_default "Received CTRL+C. Exiting..."
+    tput sgr0
+    exit 130
+}
+
 # ----------------------------------
 
-# Verify whether the script is running with root privileges.
-
-if [[ $EUID -ne 0 ]]; then
-	print_error "The script must be run as root."
-	exit 1
-fi
+rootcheck "$@"
 
 # Distribution check.
 
@@ -49,7 +105,7 @@ if [ "$1" != "--skip-distro-check" ]; then
     elif [ -e /etc/os-release ]; then
         distro=$(awk -F= '/^ID=/{print tolower($2)}' /etc/os-release)
     else
-        print_error "Failed to determine the distribution. Make sure lsb-release is installed or /etc/os-release is accessible."
+        print_error "Failed to determine the distribution. Make sure lsb-release is installed or /etc/os-release is accessible. If you're sure this is an error, use --skip-distro-check."
         exit 1
     fi
     
@@ -68,48 +124,97 @@ fi
 
 dependencies=("iptables" "nftables" "ipset" "netfilter-persistent" "git")
 missing_dependencies=()
-
-for dependency in "${dependencies[@]}"; do
-    if ! dpkg-query -W -f='${Status}' "$dependency" 2>/dev/null | grep -q "install ok installed"; then
-        missing_dependencies+=("$dependency")
+for dep in "${dependencies[@]}"; do
+    if ! dpkg -s "$dep" &>/dev/null; then
+        missing_dependencies+=("$dep")
     fi
 done
 
+# If there are missing dependencies, prompt the user to install them
 if [ "${#missing_dependencies[@]}" -gt 0 ]; then
-    print_error "Not all dependencies are installed. Please run the following command to fix that:"
-    echo "sudo apt install ${missing_dependencies[*]} -y"
-    exit 1
-fi
-
-# Various checks of the config file.
-
-CONFIG_FILE="config.sh"
-GITHUB_REPO="https://raw.githubusercontent.com/yuk1c/antiddos/master"
-
-# Check if config file exists.
-if [ ! -f "$CONFIG_FILE" ]; then
-    print_error "No config file found. Downloading it from GitHub..."
+    print_warning "The following dependencies are missing: ${missing_dependencies[*]}"
     
-    # Download the config file from GitHub
-    if wget -q "$GITHUB_REPO/$CONFIG_FILE" -O "$CONFIG_FILE"; then
-        echo "Config file was downloaded successfully."
+    # Check if user has sudo privileges
+    if sudo -v >/dev/null 2>&1; then
+        print_default2 "Do you want to install them with sudo? (y/n)"
+
+        read -r install_response
+        case "$install_response" in
+            [yY])
+                # Install missing dependencies
+                apt install "${missing_dependencies[@]}" -y
+                ;;
+            [nN])
+                print_warning "The script cannot run without them. Exiting..."
+                exit 1
+                ;;
+            *)
+                print_error "Incorrect answer. Please respond with 'y' or 'n'."
+                exit 1
+                ;;
+        esac
     else
-        print_error "Unable to load config file from GitHub. Please check your internet connectivity and GitHub availability."
+        print_warning "Cannot find sudo. Please install the following dependencies manually:"
+        for dep in "${missing_dependencies[@]}"; do
+            echo "  - $dep"
+        done
         exit 1
     fi
 fi
 
-# Check if config file is readable.
-if [ ! -r "$CONFIG_FILE" ]; then
-    print_error "$CONFIG_FILE is not readable. Please check file permissions."
-    exit 1
-fi
+# Various checks of the config and blacklist files.
+config_file="config.sh"
+blacklist_file="blacklist"
+github_repo="https://raw.githubusercontent.com/yuk1c/antiddos/master"
 
-# Check if config file is not empty.
-if [ ! -s "$CONFIG_FILE" ]; then
-    print_error "$CONFIG_FILE is empty. Please provide configuration settings in the file."
-    exit 1
-fi
+check_config() {
+    if [ ! -f "$config_file" ]; then
+        print_error "No config file found. Attempting to download it from GitHub..."
+
+        if wget -q "$github_repo/$config_file" -O "$config_file"; then
+            print_success "The config file was downloaded. Script will be restarted automatically."
+        else
+            print_error "Unable to load the config file from GitHub. Please check your internet connectivity and GitHub availability."
+            exit 1
+        fi
+    fi
+
+    if [ ! -r "$config_file" ]; then
+        print_error "$config_file is not readable. Please check file permissions."
+        exit 1
+    fi
+
+    if [ ! -s "$config_file" ]; then
+        print_error "$config_file is empty. Restore it from the repository."
+        exit 1
+    fi
+}
+
+check_blacklist() {
+    if [ ! -f "$blacklist_file" ]; then
+        print_error "No blacklist file found. Attempting to download it from GitHub..."
+
+        if wget -q "$github_repo/$blacklist_file" -O "$blacklist_file"; then
+            print_success "The blacklist file was downloaded. Script will be restarted automatically."
+        else
+            print_error "Unable to load the blacklist file from GitHub. Please check your internet connectivity and GitHub availability."
+            exit 1
+        fi
+    fi
+
+    if [ ! -r "$blacklist_file" ]; then
+        print_error "$blacklist_file is not readable. Please check file permissions."
+        exit 1
+    fi
+    
+    if [ ! -s "$blacklist_file" ]; then
+        print_error "$blacklist_file is empty. Restore it from the repository."
+        exit 1
+    fi
+}
+
+check_blacklist
+check_config
 
 # Parse script arguments.
 while [[ "$#" -gt 0 ]]; do
@@ -162,18 +267,19 @@ fi
 
 # --------------------------------
 
+# Execute the contents of config.sh in the current context.
+# Needed to import and use the config file.
 . config.sh
 
-# Flush all rules and add a 'filter' table.
+# Call the protection against accidental starts.
+accidental_start_prevention
+
+# Flush all rules and add the 'filter' table.
  "$NFT" flush ruleset
  "$NFT" add table filter > /dev/null 2>&1 &
 
 # Delete the "blacklist" ip set.
  "$IPS" destroy blacklist > /dev/null 2>&1 &
-
-# Backup sysctl.conf.
-# It's located in /etc.
- cp /etc/sysctl.conf{,.backup} > /dev/null 2>&1 &
 
 # --------------------------------
 
@@ -187,22 +293,22 @@ fi
 # Allow established and related connections.
  "$IP" -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# Allow SSH. You can implement whitelisting in here.
+# Allow SSH. You can implement whitelisting here.
  "$IP" -A INPUT -p tcp --dport "$SSH" -j ACCEPT
 
 # Allow some protocols. This is optional, but may be needed in some cases.
-# "$IP" -A INPUT -p mptcp -j ACCEPT - If you need mptcp
-# "$IP" -A INPUT -p igmp -j ACCEPT  - If you need igmp
-# "$IP" -A INPUT -p gre -j ACCEPT   - If you need gre
-# "$IP" -A INPUT -p esp -j ACCEPT   - If you need esp (IPsec)
-# "$IP" -A INPUT -p ah -j ACCEPT    - If you need ah (IPsec)
+# "$IP" -A INPUT -p mptcp -j ACCEPT - If you need MultiPath TCP
+# "$IP" -A INPUT -p igmp -j ACCEPT  - If you need IGMP
+# "$IP" -A INPUT -p gre -j ACCEPT   - If you need GRE
+# "$IP" -A INPUT -p esp -j ACCEPT   - If you need IPsec
+# "$IP" -A INPUT -p ah -j ACCEPT    - If you need IPsec
 
 # --------------------------------
-# Firewall ruleset.
+# Default ruleset.
 
 # Mitigate some TCP Floods with hashlimits.
 # You can try to set srcmask lower than /32.
-# It will limit not only the source-IP, but also IPs from the netmask.
+# It will limit not only the source address, but also IPs from the netmask.
 # Also, you can configure dstmask to protect your IP neighbors.
 # ----------------------------------------------------------------
  "$IP" -t raw -A PREROUTING -p tcp --syn \
@@ -253,7 +359,7 @@ fi
  "$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
 
 # Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
-# If you're trying to optimize the ruleset, you can comment all except ALL/NONE and ALL/ALL.
+# If you're trying to optimize the ruleset, and your server is well-protected on upstream, you can comment rules.
 # ----------------------------------------------------------------
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j "$ITFPA"
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j "$ITFPA"
@@ -263,21 +369,17 @@ fi
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -j "$ITFPA"
  "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ALL -j "$ITFPA"
 
-# Safeguard against CPU overload during AMP DDoS attacks by limiting DNS/NTP packets per second (PPS).
+# Safeguard against CPU overload during amplificated DDoS attacks by limiting DNS/NTP packets per second rate (PPS).
 # ----------------------------------------------------------------
  "$IP" -t raw -A PREROUTING -p udp -m multiport --sports "$LUSP" -m hashlimit \
   --hashlimit-mode srcip,srcport --hashlimit-name Amplification-Limit \
   --hashlimit-above 256/m -j DROP
 
-# Drop SYNs with src-port <1024 to prevent many attack types.
+# Drop SYN packets with source-port <1024 to prevent some attacks.
 # ----------------------------------------------------------------
  "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN: Invalid Source Port" -j DROP
 
-# Drop packets with zero payloads.
-# ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -m string --algo bm --string "0x00000" -j DROP
-
-# Drop all invalid packets.
+# Drop all packets with the invalid state.
 # ----------------------------------------------------------------
  "$IP" -t mangle -I PREROUTING -p all -m conntrack --ctstate "$ST" -m comment --comment "Packet State Filter" -j DROP
 
@@ -292,12 +394,12 @@ fi
  "$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "State NEW but not SYN" -j DROP
 
 # Drop TCP packets with invalid MSS to mitigate certain attack types.
-# Try to set max MSS to 8960 if you wanna more stricter protection.
+# Try to set max MSS to 8960/1460 if you want stricter protection.
 # But then you'll need to modify the rule and do this only for your NIC.
 # ----------------------------------------------------------------
  "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss "$MSS" -m comment --comment "Invalid MSS" -j DROP
 
-# Limit SYN/ICMPv6 packets per second (PPS) & drop fragmented packets to mitigate certain IPv6 attacks, although they are not currently common.
+# Limit SYN/ICMPv6 packets per second (PPS) & drop fragmented packets to mitigate certain IPv6 attacks, though they aren't currently common.
 # ----------------------------------------------------------------
  "$IP6" -t raw -A PREROUTING -p icmpv6 -m limit --limit 3/s -j ACCEPT
  "$IP6" -t raw -A PREROUTING -p icmpv6 -j DROP
@@ -305,8 +407,8 @@ fi
  "$IP6" -t raw -A PREROUTING -p tcp --syn -j DROP
  "$IP6" -t raw -A PREROUTING -m frag -j DROP
 
-# Block some multicast IPs, censys IPs, shodan IPs...
-# We use a big hash size, so it doesn't affect performance.
+# Block some IP addresses to enhance security.
+# This rule does not impact performance a lot.
 # ----------------------------------------------------------------
 "$IPS" create blacklist nethash hashsize 260000 > /dev/null 2>&1
 while IFS= read -r bad_ip; do
@@ -314,7 +416,7 @@ while IFS= read -r bad_ip; do
 done <"./blacklist"
 "$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA" > /dev/null 2>&1
 
-# Optional rules. We aren't providing any support for them.
+# Advanced ruleset.
 # ----------------------------------------------------------------
 
 #################
@@ -334,48 +436,48 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-ece -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp -m ecn --ecn-tcp-cwr -j DROP
 
-# Drop SQL Injection attempts. These rules needs to be configured in case you want to use them.
-# "$IP" -A INPUT -p tcp --dport 3306 -m string --string "union select" --algo bm -j DROP
-# "$IP" -A INPUT -p tcp --dport 3306 -m string --string "information_schema" --algo bm -j DROP
+# Prevent SQL Injection attempts. These rules are need to be configured if you want to use them.
+# "$IP" -t raw -I PREROUTING -p tcp --dport 3306 -m string --string "union select" --algo bm -j DROP
+# "$IP" -t raw -I PREROUTING -p tcp --dport 3306 -m string --string "information_schema" --algo bm -j DROP
 
 # Block HTTP 1.1 packets received on non-HTTP port(s). (common attack pattern)
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string ! --string "HTTP/1.1 OK" --algo kmp -j DROP
 
-# Block malformed DNS flood. (new DDoS methods)
+# Block malformed DNS Flood.
+# These rules are tested well, and can be used if you experience a lot of DNS amplification attacks. 
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --string "Refused" --algo bm -j DROP
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --string "0000000000000000" --algo bm -j DROP
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --hex-string "|3000300030003000300030003000300030003000300030003000|" --algo bm -j DROP
 
-# Prevent NTP Reflection attacks by blocking incoming NTP Reflection packets.
-# "$IP" -t raw -A PREROUTING -p udp -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
-
-# SYN and ACK Challenge.
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN SYN -j TCPMSS --clamp-mss-to-pmtu
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ACK -j DROP
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL RST,ACK -j DROP
+# Prevent NTP Reflection attacks by blocking incoming NTP Reflection packets received on the default NTP server port.
+# This rule isn't checked.
+# "$IP" -t raw -A PREROUTING -p udp --dport 123 -m u32 --u32 "0>>22&0x3C@8&0xFF" -j DROP
 
 # SourcePort;ProtocolFilter against some attacks.
 # The last rule may cause problems with apt.
+# These rules are recommended for a better protection, but you need to test them well.
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string ! --string "DNS" --algo kmp -j DROP
 # "$IP" -t raw -A PREROUTING -p udp --sport 123 -m string ! --string "NTP" --algo kmp -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --sport 80 -m string ! --string "HTTP" --algo kmp -j DROP
 
 # Patch some random attack.
-# "$IP" -t raw -A PReROUTING -p tcp --tcp-flags ALL SYN -m u32 --u32 "0>>22&0x3C@12>>26&0x3F=0" -j DROP
+# "$IP" -t raw -A PReROUTING -p tcp --syn -m u32 --u32 "0>>22&0x3C@12>>26&0x3F=0" -j DROP
 
-# SYN/ACK Reflection block.
+# SYN/ACK Reflection mitigation.
+# Optimization tip: comment the default rule that limits SYN-ACK when using these.
 # "$IP" -t mangle -A PREROUTING -p tcp --syn -m recent --name blacklist --set -j DROP
 # "$IP" -t mangle -A PREROUTING -p tcp --tcp-flags ALL SYN,ACK -m recent --name blacklist --rcheck --seconds 60 --hitcount 10 -j DROP
 
-# Drop ACK-PSH Packets without any data.
+# Drop ACK-PSH Packets that do not contain any data.
 # Shouldn't cause problems because these packets aren't legitimate.
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -m u32 --u32 "0>>22&0x3C@12=0" -j DROP
 
 # [BETA] Drop TFO (TCP Fast Open) Packets. (SYN with data)
-# "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN SYN -m u32 --u32 "12&0xFFFF=0x0" -j DROP
+# "$IP" -t raw -A PREROUTING -p tcp --syn -m u32 --u32 "12&0xFFFF=0x0" -j DROP
 
 # Length filter. Allows only packets with correct length.
-# Max is 1500, you may have 9000 MTU - in this case you should set 9000 as a max value.
+# The two first rules are configured for 1500 
+# Maximum is 1500, but you can have 9000 MTU - and in this case, you should set 9000 as the maximum value.
 # "$IP" -t raw -A PREROUTING -p tcp -m length ! --length 40:1500 -j DROP
 # "$IP" -t raw -A PREROUTING -p udp -m length ! --length 20:1500 -j DROP
 # "$IP" -t raw -A PREROUTING -p icmp -m length ! --length 64:72 -j DROP
@@ -387,17 +489,17 @@ done <"./blacklist"
 # Whitelisting.
 # "$IP" -t raw -I PREROUTING -p <tcp/udp> --dport 1194 ! -s <trusted_ip> -j DROP
 
-# Application-layer filter. (UDP)
+# 'Application-layer' filter. (UDP)
 # "$IP" -t mangle -A PREROUTING -p udp --dport 1194 --match bpf --bytecode "16,48 0 0 0,84 0 0 240,21 0 12 64,48 0 0 9,21 0 10 17,40 0 0 6,69 8 0 8191,177 0 0 0,80 0 0 8,21 0 5 56,64 0 0 17,21 0 3 1,72 0 0 4,21 0 1 62,6 0 0 65535,6 0 0 0" -m conntrack --ctstate NEW -m hashlimit --hashlimit-upto 1/second --hashlimit-burst 1 --hashlimit-mode srcip --hashlimit-name accept-openvpn -j ACCEPT
 
-# Conntrack entity (entry) count limiter.
+# Flow limiter. Limits the number of 'flows' - or conn-track entries.
 # "$IP" -t mangle -A PREROUTING -p udp --dport 1194 -m connlimit --connlimit-above 2 -j DROP
 
 ##############
 # SSH Shield #
 ##############
 
-# Anti-socket method protection.
+# Protection against 'socket methods'.
 # "$IP" -t mangle -A PREROUTING -p tcp --dport "$SSH" -m connlimit --connlimit-above 3 -j REJECT
 
 ###############
@@ -418,15 +520,18 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string --string 'shodan' --algo kmp -j DROP
 
 # Drop SSL packets.
+# SSL is obsolete, use TLS instead.
 # "$IP" -A INPUT -p tcp --dport 443 -m string --string "SSL" --algo bm -j DROP
 
 # Drop "trace" HTTP method packets.
+# Already blocked by most http-webservers.
 # "$IP" -A INPUT -p tcp --dport 80 -m string --string "TRACE" --algo bm -j DROP
 
 ######################
 # AntiSpoofing rules #
 ######################
 
+# Block IPv4 options.
 # "$IP" -t raw -A PREROUTING -m ipv4options --ssrr -j DROP
 # "$IP" -t raw -A PREROUTING -m ipv4options --lsrr -j DROP
 # "$IP" -t raw -A PREROUTING -m ipv4options --rr -j DROP
@@ -461,7 +566,7 @@ done <"./blacklist"
 # Geo blocking (in this rule, we block China, for example).
 # "$IP" -t raw -I PREROUTING -m geoip --src-cc CN -j DROP
 
-# Drop packets sent to DNS/NTP port but which are not DNS/NTP packets.
+# Drop packets sent to DNS/NTP port but which are not related to those protocols.
 # You can make multiple rules like that.
 # "$IP" -t raw -A PREROUTING -p udp --dport 53 -m udp -m string ! --string "DNS" --algo bm --to 65535 -j ACCEPT
 # "$IP" -t raw -A PREROUTING -p udp --dport 123 -m udp -m string ! --string "NTP" --algo bm --to 65535 -j ACCEPT
@@ -481,11 +586,12 @@ done <"./blacklist"
 # VERY Not recommended! Shouldn't be used always.
 # "$IP" -A INPUT ! -p tcp -j DROP
 
-# [BETA] Arptables ARP Flood patch.
-# arptables -A INPUT --limit-rate 3/s --limit-burst 20 -j ACCEPT
+# Limit ARP packets per MAC address.
+# Needs testing.
+# arptables -A INPUT --limit-rate 3/s --limit-burst 5 -j ACCEPT
 
 # TCP Ratelimit (All flags).
-# Using this rule may make other TCP rate limits redundant or conflicting. Evaluate your ruleset accordingly.
+# Using this rule may make other TCP rate limits redundant or conflicting.
 # "$IP" -t raw -A PREROUTING -p tcp -m hashlimit --hashlimit-name tcp --hashlimit-mode srcip --hashlimit --hashlimit-above 10000/s -j DROP
 
 # Block some unusual attacks by blocking zero TTL.
@@ -496,21 +602,21 @@ done <"./blacklist"
 # "$IP" -t raw -A PREROUTING -p udp -m multiport --sports 0,1 -j DROP
 
 # ACK & ACK-PSH Limits (against most TCP bypasses).
-# Please note that these rules can impact legitimate traffic due to their strict nature.
+# Note: these rules can impact legitimate traffic due to their strict nature.
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK ACK -m hashlimit --hashlimit-mode srcip --hashlimit-name ackflood --hashlimit-above 1000/s --hashlimit-burst 2 -j DROP
 # "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH ACK,PSH -m hashlimit --hashlimit-mode srcip --hashlimit-name ackpshflood --hashlimit-above 1000/s --hashlimit-burst 2 -j DROP
 
-# Block STUN by sport or string. You can combine them into one rule or use together.
+# Block STUN by source-port or string. You can combine them into one rule or use together.
 # "$IP" -t raw -A PREROUTING -p udp --sport 3478 -j DROP
 # "$IP" -t raw -A PREROUTING -p udp -m string --string "STUN" --algo kmp -j DROP
 
 # Limit connection establishing speed. (per source IP) (we don't use --rsource because it is already set by default)
-# Limiting upto 30 SYN_RECV per 5s from each new IP.
+# Limiting upto 30 SYN_RECV per 5 seconds from each new IP.
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --set
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --update --rcheck --rttl --seconds 5 --hitcount 30 
 
 # Filtering by source IP address routing type.
-# It wasn't tested a lot and may do nothing.
+# It wasn't tested a lot and can do nothing.
 # "$IP" -t mangle -A PREROUTING -m addrtype --src-type UNREACHABLE -j DROP
 # "$IP" -t mangle -A PREROUTING -m addrtype --src-type BLACKHOLE -j DROP
 # "$IP" -t mangle -A PREROUTING -m addrtype --src-type MULTICAST -j DROP
@@ -528,14 +634,44 @@ done <"./blacklist"
 
 # If you want to enable logging to dmesg, uncomment the following first rule:
 
-# The rule below limits logging to 5 messages per second:
+# The rule below enables logging with the limit of 5 messages per second:
 # "$IP" -A INPUT -m limit --limit 5/m -j LOG --log-prefix "[yuki-script] DROP:" --log-ip-options --log-tcp-options --log-tcp-sequence
 
 # The rule below actually drops packets:
  "$IP" -A INPUT -j DROP
 
-# Sysctl.conf tweaks
+# Sysctl.conf tweaks.
 # --------------------------------
+
+# Backup management.
+# Note: the backups are located in /etc/sysctl_backups/.
+
+# If the backup directory is not exist, create it.
+# If cannot create it - show an error and exit.
+if [ ! -d "$backup_dir" ]; then
+    if ! mkdir -p "$backup_dir"; then
+        print_error "Cannot create backup directory: $backup_dir" >&2
+        exit 1
+    fi
+fi
+
+# Make a backup of the sysctl.conf.
+# If cannot create it - show an error and exit.
+if ! cp "$sysctl_conf" "$backup_file"; then
+    print_error "Failed to create backup." >&2
+    exit 1
+fi
+
+# Scan for old backup files, and delete them, if needed.
+# If cannot delete them - show an error and exit.
+if [ "$num_backups" -gt "$max_backups" ]; then
+    if ! find "$backup_dir" -maxdepth 1 -type f -printf '%T@ %p\n' | sort -k1,1n | head -n -"$max_backups" | cut -d' ' -f2- | xargs -I {} rm "{}"; then
+        print_error "Failed to remove old backups." >&2
+        exit 1
+    fi
+fi
+
+# Apply the tweaked sysctl.conf file.
 
 echo -e "
 #
@@ -663,7 +799,7 @@ echo -e "
 # --------------------------------
  net.ipv4.icmp_ignore_bogus_error_responses = 1
 
-# Allow to use more ports as a s-ports.
+# Allow to use more ports as a source ones.
 # --------------------------------
  net.ipv4.ip_local_port_range=1024 65535
 
@@ -685,23 +821,12 @@ net.ipv4.tcp_invalid_ratelimit = 1000" > /etc/sysctl.conf
 systemctl enable --now netfilter-persistent > /dev/null 2>&1 &
 clear
 
-if [ "$autosave" = true ]; then
- netfilter-persistent save > /dev/null 2>&1 clear
- message="All script changes were applied. No action required."
-else
- message="Script changes applied, but rules aren't saved.\
- Check the network now: If it works OK, do 'sudo netfilter-persistent save'."
-fi
-
-print_success "$message"
-echo -e "${BGray}"
-echo -e "The 'Drop' policy blocks all incoming traffic that isn't explicitly allowed (SSH is already allowed).
-To allow a specific TCP port, use: 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'
+print_success "All changes, except for ruleset saving, were done.\
+ Now, make sure your networking is okay, if yes - do 'sudo netfilter-persistent save'."
+print_default2 "Note: The 'Drop' policy drops all incoming traffic that isn't explicitly allowed (SSH is already allowed).
+If you want to allow a specific TCP port: 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'
 For UDP ports, use: 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'
-You can also check the current rules and their statistics with: 'nft list ruleset'"
+You can also view the current ruleset and its statistics with: 'nft list ruleset'"
 
-# Reset terminal color and exit.
-tput sgr0
-exit 0
-
-# if you want to delete a rule - replace -A (or -I) with -D and apply.
+tput sgr0 # Reset terminal color. We use this to prevent the terminal from being colored after the script exits.
+exit 0 # Exit.

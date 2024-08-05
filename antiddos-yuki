@@ -4,6 +4,10 @@
 
 # --------------------------------
 
+# Execute the contents of config.sh in the current context.
+# Needed to import and use the config file.
+. config.sh
+
 # Functions.
 
 print_default() {
@@ -29,7 +33,7 @@ print_success() {
 	fi
 }
 
-print_warning () {
+print_warning() {
     # For printing gradient warning messages with auto-fallback.
     if command -v lolcat &>/dev/null; then
         echo -e "⚠︎ Warning: $1" | lolcat >&2
@@ -92,6 +96,8 @@ cleanup() {
 }
 
 # ----------------------------------
+# Call the accidental start prevention function.
+accidental_start_prevention
 
 rootcheck "$@"
 
@@ -122,7 +128,7 @@ fi
 
 # Check if all dependencies are installed.
 
-dependencies=("iptables" "nftables" "ipset" "netfilter-persistent" "git")
+dependencies=("nftables" "netfilter-persistent" "git")
 missing_dependencies=()
 for dep in "${dependencies[@]}"; do
     if ! dpkg -s "$dep" &>/dev/null; then
@@ -162,10 +168,9 @@ if [ "${#missing_dependencies[@]}" -gt 0 ]; then
     fi
 fi
 
-# Various checks of the config and blacklist files.
+# Various checks of the config file.
 config_file="config.sh"
-blacklist_file="blacklist"
-github_repo="https://raw.githubusercontent.com/yuk1c/antiddos/master"
+github_repo="https://raw.githubusercontent.com/yuk1c/antiddos/beta"
 
 check_config() {
     if [ ! -f "$config_file" ]; then
@@ -190,30 +195,6 @@ check_config() {
     fi
 }
 
-check_blacklist() {
-    if [ ! -f "$blacklist_file" ]; then
-        print_error "No blacklist file found. Attempting to download it from GitHub..."
-
-        if wget -q "$github_repo/$blacklist_file" -O "$blacklist_file"; then
-            print_success "The blacklist file was downloaded. Script will be restarted automatically."
-        else
-            print_error "Unable to load the blacklist file from GitHub. Please check your internet connectivity and GitHub availability."
-            exit 1
-        fi
-    fi
-
-    if [ ! -r "$blacklist_file" ]; then
-        print_error "$blacklist_file is not readable. Please check file permissions."
-        exit 1
-    fi
-    
-    if [ ! -s "$blacklist_file" ]; then
-        print_error "$blacklist_file is empty. Restore it from the repository."
-        exit 1
-    fi
-}
-
-check_blacklist
 check_config
 
 # Parse script arguments.
@@ -243,7 +224,7 @@ if [ "$SKIP_UPDATE_CHECK" != "true" ]; then
         case "$response" in
             [yY])
                 # Attempt to pull updates, handle errors quietly
-                if ! git pull -q origin main; then
+                if ! git pull -q origin beta; then
                     print_error "Unable to update script. You can skip the update check with the '--skip-update-check' argument if you think this is an mistake."
                     exit 1
                 fi
@@ -267,156 +248,85 @@ fi
 
 # --------------------------------
 
-# Execute the contents of config.sh in the current context.
-# Needed to import and use the config file.
-. config.sh
-
-# Call the protection against accidental starts.
-accidental_start_prevention
-
 # Flush all rules and add the 'filter' table.
- "$NFT" flush ruleset
- "$NFT" add table filter > /dev/null 2>&1 &
-
-# Delete the "blacklist" ip set.
- "$IPS" destroy blacklist > /dev/null 2>&1 &
-
-# --------------------------------
-
-# Set default input policy to DROP.
-# Drop policy swiftly deals with any unwanted traffic.
- "$IP" -P INPUT DROP
+ "$nft" flush ruleset
+ "$nft" add table yuki-script > /dev/null 2>&1
+ "$nft" 'add chain ip yuki-script prerouting { type filter hook prerouting priority 0; policy drop; }'
 
 # Allow the local interface.
- "$IP" -A INPUT -i lo -s 127.0.0.0/8 -j ACCEPT
+ "$nft" add rule ip yuki-script prerouting iif "lo" ip saddr 127.0.0.0/8 accept
 
 # Allow established and related connections.
- "$IP" -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+ "$nft" add rule ip yuki-script prerouting ct state established,related accept
 
-# Allow SSH. You can implement whitelisting here.
- "$IP" -A INPUT -p tcp --dport "$SSH" -j ACCEPT
+# Allow SSH. You can implement whitelisting here. Below is an example.
+# "$nft" add rule ip yuki-script prerouting ip saddr 192.168.1.0/24 tcp dport "$SSH" accept
+ "$nft" add rule ip yuki-script prerouting tcp dport "$SSH" accept
 
-# Allow some protocols. This is optional, but may be needed in some cases.
-# "$IP" -A INPUT -p mptcp -j ACCEPT - If you need MultiPath TCP
-# "$IP" -A INPUT -p igmp -j ACCEPT  - If you need IGMP
-# "$IP" -A INPUT -p gre -j ACCEPT   - If you need GRE
-# "$IP" -A INPUT -p esp -j ACCEPT   - If you need IPsec
-# "$IP" -A INPUT -p ah -j ACCEPT    - If you need IPsec
+# If you need to allow a protocol, use this template:
+# "$NFT" add rule ip yuki-script input ip protocol <protocol> accept
+# Can be anything from /etc/protocols.
 
 # --------------------------------
-# Default ruleset.
+# Basic ruleset.
 
-# Mitigate some TCP Floods with hashlimits.
-# You can try to set srcmask lower than /32.
-# It will limit not only the source address, but also IPs from the netmask.
-# Also, you can configure dstmask to protect your IP neighbors.
+# Combat some TCP flood attacks by applying rate-limits.
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p tcp --syn \
-  -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 \
-  --hashlimit-dstmask 32 --hashlimit-name synflood \
-  --hashlimit-above "$SPL" --hashlimit-htable-expire "$HTE" \
-  --hashlimit-htable-size "$HTS" --hashlimit-htable-max "$HTM" -j DROP
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,ACK SYN,ACK \
-  -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 \
-  --hashlimit-dstmask 32 --hashlimit-name synackflood \
-  --hashlimit-above "$SAPL" --hashlimit-burst 2 \
-  --hashlimit-htable-expire "$HTE" --hashlimit-htable-size "$HTS" \
-  --hashlimit-htable-max "$HTM" -j DROP
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags RST RST \
-  -m hashlimit --hashlimit-mode srcip --hashlimit-srcmask 32 \
-  --hashlimit-dstmask 32 --hashlimit-name rstflood \
-  --hashlimit-above "$RPL" --hashlimit-burst 2 --hashlimit-htable-expire "$HTE" \
-  --hashlimit-htable-size "$HTS" --hashlimit-htable-max "$HTM" -j DROP
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags syn limit rate over "$SPL" drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags syn,ack limit rate over "$SAPL" drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags rst limit rate over "$RPL" drop
 
-# Mitigate UDP Floods with hashlimit.
+# Allow only legitimate TCP flags and flags combinatioins.
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p udp -m hashlimit --hashlimit-above "$UPL" \
-  --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 \
-  --hashlimit-name udp-flood-limit --hashlimit-burst "$UPL" \
-  --hashlimit-htable-size "$HTS" --hashlimit-htable-max 65536 \
-  --hashlimit-htable-expire "$HTE" -j DROP
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags ack accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags fin,ack accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags rst,ack accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags psh,ack accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags urg,ack accept
 
-# Mitigate ICMP Floods with hashlimits. Also, block some ICMP types for enhanced security.
+# Mitigate UDP Floods with a ratelimit.
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p icmp -m comment --comment "ICMP hashlimit" -m hashlimit \
-  --hashlimit-mode srcip --hashlimit-srcmask 32 --hashlimit-dstmask 32 \
-  --hashlimit-name icmp-limit --hashlimit-above "$IPL" --hashlimit-burst 2 \
-  --hashlimit-htable-size "$HTS" --hashlimit-htable-max 65536 \
-  --hashlimit-htable-expire "$HTE" -j DROP
- "$IP" -t raw -A PREROUTING -p icmp --icmp-type address-mask-request -j DROP
- "$IP" -t raw -A PREROUTING -p icmp --icmp-type router-solicitation -j DROP
- "$IP" -t raw -A PREROUTING -p icmp --icmp-type timestamp-request -j DROP
- "$IP" -t raw -A PREROUTING -p icmp --icmp-type redirect -j DROP
+ "$nft" 'add rule ip yuki-script prerouting ip protocol udp meter udp-flood-limit { ip saddr limit rate over 3003/second } counter drop'
 
-# To relieve server load during UDP Floods, restrict the outgoing ICMP 'Port-Unreach' packets per second (PPS).
+# Mitigate ICMP Floods with a ratelimit. Also, block some ICMP types for enhanced security.
 # ----------------------------------------------------------------
- "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -m limit --limit "$OPL" --limit-burst 2 -j ACCEPT
- "$IP" -t raw -A OUTPUT -p icmp --icmp-type port-unreach -j DROP
-
-# To relieve server load during TCP Out-Of-State Floods, restrict the outgoing TCP RST packets per second (PPS).
-# ----------------------------------------------------------------
- "$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -m limit --limit "$OTRL" -j ACCEPT
- "$IP" -t raw -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
-
-# Enhance security and block basic attacks by filtering TCP packets with invalid flag combinations.
-# If you're trying to optimize the ruleset, and your server is well-protected on upstream, you can comment rules.
-# ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags SYN,RST SYN,RST -j "$ITFPA"
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags FIN,ACK FIN -j "$ITFPA"
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,URG URG -j "$ITFPA"
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,FIN FIN -j "$ITFPA"
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ACK,PSH PSH -j "$ITFPA"
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL NONE -j "$ITFPA"
- "$IP" -t raw -A PREROUTING -p tcp --tcp-flags ALL ALL -j "$ITFPA"
+ "$nft" 'add rule ip yuki-script prerouting ip protocol icmp meter icmp-limit { ip saddr limit rate over 2/second burst 2 packets } counter drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type address-mask-request drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type router-solicitation drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type timestamp-request drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type redirect drop'
 
 # Safeguard against CPU overload during amplificated DDoS attacks by limiting DNS/NTP packets per second rate (PPS).
 # ----------------------------------------------------------------
- "$IP" -t raw -A PREROUTING -p udp -m multiport --sports "$LUSP" -m hashlimit \
-  --hashlimit-mode srcip,srcport --hashlimit-name Amplification-Limit \
-  --hashlimit-above 256/m -j DROP
+ "$nft" 'add rule ip yuki-script prerouting ip protocol udp udp sport { 19,53,123,5353 } meter Amplification-Limit { ip saddr . udp sport timeout 60s limit rate over 256/minute } drop'
 
 # Drop SYN packets with source-port <1024 to prevent some attacks.
 # ----------------------------------------------------------------
- "$IP" -t raw -I PREROUTING -p tcp --syn ! --sport 1024:65535 -m comment --comment "SYN: Invalid Source Port" -j DROP
+ "$nft" 'add rule ip yuki-script prerouting tcp sport != 1024-65535 tcp flags syn / fin,syn,rst,ack counter drop'
 
-# Drop all packets with the invalid state.
+# Drop all packets with bad states.
 # ----------------------------------------------------------------
- "$IP" -t mangle -I PREROUTING -p all -m conntrack --ctstate "$ST" -m comment --comment "Packet State Filter" -j DROP
+ "$nft" 'add rule ip yuki-script prerouting ct state invalid,untracked counter drop'
 
-# Restrict the number of connections per IP to mitigate the impact of Handshake and Slowloris attacks.
-# ----------------------------------------------------------------
- "$IP" -t mangle -A PREROUTING -p tcp -m connlimit --connlimit-above "$CL" --connlimit-mask 32 \
-  -m comment --comment "Connection Limit" -j "$CLA"
+# Limit connection establishing rate and total connections per each IP address to mitigate attacks like "Socket/Handshake/Slowloris".
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp ct state new limit rate 100/second drop
+ "$nft" 'add set ip yuki-script connlimit0 { type ipv4_addr; flags dynamic; }'
+ "$nft" 'add rule ip yuki-script prerouting ip protocol tcp add @connlimit0 { ip saddr ct count over 50 } counter drop'
 
-# Drop new non-SYN TCP packets to mitigate common TCP attacks.
-# If you're trying to optimize the ruleset, check this rule. It may affect performance.
+# Perform stateful checking to drop packets with CT state NEW but not SYN.
+# This check is a bit heavy, if you have problems with CPU usage, try to remove this rule.
 # ----------------------------------------------------------------
- "$IP" -t mangle -I PREROUTING -p tcp ! --syn -m conntrack --ctstate NEW -m comment --comment "State NEW but not SYN" -j DROP
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags ! syn ct state new drop
 
-# Drop TCP packets with invalid MSS to mitigate certain attack types.
-# Try to set max MSS to 8960/1460 if you want stricter protection.
-# But then you'll need to modify the rule and do this only for your NIC.
+# Perform MSS checking for each TCP packet. Drop, if MSS is higher than 1460 bytes or less than 536.
+# You might need to adjust these rules. Also, if you don't use Jumbo Frames, you can set the maximum MSS to 1460.
+# only for a interface
 # ----------------------------------------------------------------
- "$IP" -t mangle -I PREROUTING -p tcp -m conntrack --ctstate NEW -m tcpmss ! --mss "$MSS" -m comment --comment "Invalid MSS" -j DROP
-
-# Limit SYN/ICMPv6 packets per second (PPS) & drop fragmented packets to mitigate certain IPv6 attacks, though they aren't currently common.
-# ----------------------------------------------------------------
- "$IP6" -t raw -A PREROUTING -p icmpv6 -m limit --limit 3/s -j ACCEPT
- "$IP6" -t raw -A PREROUTING -p icmpv6 -j DROP
- "$IP6" -t raw -A PREROUTING -p tcp --syn -m limit --limit 7/s --limit-burst 4 -j ACCEPT
- "$IP6" -t raw -A PREROUTING -p tcp --syn -j DROP
- "$IP6" -t raw -A PREROUTING -m frag -j DROP
-
-# Block some IP addresses to enhance security.
-# This rule does not impact performance a lot.
-# ----------------------------------------------------------------
-"$IPS" create blacklist nethash hashsize 260000 > /dev/null 2>&1
-while IFS= read -r bad_ip; do
-    "$IPS" add blacklist "$bad_ip" > /dev/null 2>&1
-done <"./blacklist"
-"$IP" -t raw -A PREROUTING -m set --match-set blacklist src -j "$IBA" > /dev/null 2>&1
+ "$nft" 'add rule ip yuki-script prerouting ip protocol tcp tcp option maxseg size > 8946 drop'
+ "$nft" 'add rule ip yuki-script prerouting ip protocol tcp tcp option maxseg size < 536 drop'
 
 # Advanced ruleset.
+# Not recommended to use until it's fully converted to nftables.
 # ----------------------------------------------------------------
 
 #################
@@ -637,8 +547,9 @@ done <"./blacklist"
 # The rule below enables logging with the limit of 5 messages per second:
 # "$IP" -A INPUT -m limit --limit 5/m -j LOG --log-prefix "[yuki-script] DROP:" --log-ip-options --log-tcp-options --log-tcp-sequence
 
-# The rule below actually drops packets:
- "$IP" -A INPUT -j DROP
+# The rules below actually drop packets:
+ "$nft" add rule ip yuki-script prerouting drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp drop
 
 # Sysctl.conf tweaks.
 # --------------------------------
@@ -817,15 +728,14 @@ echo -e "
 net.ipv4.tcp_invalid_ratelimit = 1000" > /etc/sysctl.conf
 
 "$SC" -p > /dev/null 2>&1 &
-"$IPS" save > /dev/null 2>&1 &
 systemctl enable --now netfilter-persistent > /dev/null 2>&1 &
-clear
 
+clear; print_default "BETA VERSION!!!"
 print_success "All changes, except for ruleset saving, were done.\
- Now, make sure your networking is okay, if yes - do 'sudo netfilter-persistent save'."
+ Now, make sure your networking is okay, if yes - do 'netfilter-persistent save'."
 print_default2 "Note: The 'Drop' policy drops all incoming traffic that isn't explicitly allowed (SSH is already allowed).
-If you want to allow a specific TCP port: 'iptables-nft -A INPUT -p tcp --dport PORT -j ACCEPT'
-For UDP ports, use: 'iptables-nft -A INPUT -p udp --dport PORT -j ACCEPT'
+If you need to allow a specific TCP port: 'nft add rule ip yuki-script prerouting tcp dport <port> accept'
+For UDP ports, use: 'nft add rule ip yuki-script prerouting udp dport <port> accept'
 You can also view the current ruleset and its statistics with: 'nft list ruleset'"
 
 tput sgr0 # Reset terminal color. We use this to prevent the terminal from being colored after the script exits.

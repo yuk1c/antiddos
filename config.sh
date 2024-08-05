@@ -5,8 +5,7 @@
 # Binary routes.
 IP="/sbin/iptables-nft"
 IP6="/sbin/ip6tables-nft"
-IPS="/sbin/ipset"
-NFT="/sbin/nft"
+nft="/sbin/nft"
 SC="/sbin/sysctl"
 
 # For working with sysctl.conf
@@ -34,31 +33,27 @@ CL="50"
 
 # Connection limit action
 # Default: DROP
-CLA="DROP"
-
-# IP Block action
-# Default: DROP
-IBA="DROP"
+CLA="drop"
 
 # SYN PPS limit
-# Default: 5/s
-SPL="5/s"
+# Default: 5/second
+SPL="5/second"
 
 # SYN-ACK PPS limit
-# Default: 5/s
-SAPL="5/s"
+# Default: 5/second
+SAPL="5/second"
 
 # RST PPS limit
-# Default: 2/s
-RPL="2/s"
+# Default: 2/second
+RPL="2/second"
 
 # UDP PPS limit
-# Default: 3000/s
-UPL="3000/s"
+# Default: 3000/second
+UPL="3000/second"
 
 # ICMP PPS limit
-# Default: 2/s
-IPL="2/s"
+# Default: 2/second
+IPL="2/second"
 
 # Hashtable size (buckets)
 # Default: 65536
@@ -77,13 +72,10 @@ HTE="300000"
 MSS="536:65535"
 
 # Packet state filter
-# Default: INVALID
-# Add "UNTRACKED" for additional protection. But this may cause problems!
-ST="INVALID"
+ST="invalid,untracked"
 
-# Limited UDP source ports (against amplification
-# Default: 19,53,123,111,123,137,389,1900,3702,5353
-LUSP="19,53,123,111,123,137,389,1900,3702,5353"
+# Limited UDP source ports (against amplification)
+LUSP="19, 53, 111, 123, 137, 389, 1900, 3702, 5353"
 
 # Invalid TCP Flag packet action
 # Default: DROP

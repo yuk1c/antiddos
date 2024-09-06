@@ -2,14 +2,8 @@
 
 ### 📥 Ubuntu Installation
 ```
-sudo apt update && sudo apt remove ufw && sudo apt install netfilter-persistent nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
+sudo apt update && sudo apt remove ufw && sudo apt install netfilter-persistent nftables git xtables-addons-common -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
 ``` 
-
-### 🔽 Debian Installation (experimental)
-###### Please note that the command needs to be run as root.
-```
-apt update && apt install iptables ipset netfilter-persistent ipset-persistent nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && bash antiddos-yuki && cd ..
-```
 
 ### 📋 Requirements
 - Bash

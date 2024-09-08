@@ -257,11 +257,11 @@ fi
  "$nft" add rule ip yuki-script prerouting iif "lo" ip saddr 127.0.0.0/8 accept
 
 # Allow established and related connections.
- "$nft" add rule ip yuki-script prerouting ct state established,related accept
+ "$nft" add rule ip yuki-script prerouting ct state established,related counter accept
 
 # Allow SSH. You can implement whitelisting here. Below is an example.
 # "$nft" add rule ip yuki-script prerouting ip saddr 192.168.1.0/24 tcp dport "$SSH" accept
- "$nft" add rule ip yuki-script prerouting tcp dport "$SSH" accept
+ "$nft" add rule ip yuki-script prerouting tcp dport "$SSH" counter accept
 
 # If you need to allow a protocol, use this template:
 # "$NFT" add rule ip yuki-script input ip protocol <protocol> accept
@@ -272,17 +272,17 @@ fi
 
 # Combat some TCP flood attacks by applying rate-limits.
 # ----------------------------------------------------------------
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags syn limit rate over "$SPL" drop
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags syn,ack limit rate over "$SAPL" drop
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags rst limit rate over "$RPL" drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags syn limit rate over "$SPL" counter drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags syn,ack limit rate over "$SAPL" counter drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags rst limit rate over "$RPL" counter drop
 
-# Allow only legitimate TCP flags and flags combinatioins.
+# Allow only legitimate TCP flags and flags combinations.
 # ----------------------------------------------------------------
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags ack accept
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags fin,ack accept
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags rst,ack accept
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags psh,ack accept
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags urg,ack accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags ack counter accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags fin,ack counter accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags rst,ack counter accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags psh,ack counter accept
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags urg,ack counter accept
 
 # Mitigate UDP Floods with a ratelimit.
 # ----------------------------------------------------------------
@@ -291,14 +291,14 @@ fi
 # Mitigate ICMP Floods with a ratelimit. Also, block some ICMP types for enhanced security.
 # ----------------------------------------------------------------
  "$nft" 'add rule ip yuki-script prerouting ip protocol icmp meter icmp-limit { ip saddr limit rate over 2/second burst 2 packets } counter drop'
- "$nft" 'add rule ip yuki-script prerouting icmp type address-mask-request drop'
- "$nft" 'add rule ip yuki-script prerouting icmp type router-solicitation drop'
- "$nft" 'add rule ip yuki-script prerouting icmp type timestamp-request drop'
- "$nft" 'add rule ip yuki-script prerouting icmp type redirect drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type address-mask-request counter drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type router-solicitation counter drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type timestamp-request counter drop'
+ "$nft" 'add rule ip yuki-script prerouting icmp type redirect counter drop'
 
 # Safeguard against CPU overload during amplificated DDoS attacks by limiting DNS/NTP packets per second rate (PPS).
 # ----------------------------------------------------------------
- "$nft" 'add rule ip yuki-script prerouting ip protocol udp udp sport { 19,53,123,5353 } meter Amplification-Limit { ip saddr . udp sport timeout 60s limit rate over 256/minute } drop'
+ "$nft" 'add rule ip yuki-script prerouting ip protocol udp udp sport { 19,53,123,5353 } meter Amplification-Limit { ip saddr . udp sport timeout 60s limit rate over 256/minute } counter drop'
 
 # Drop SYN packets with source-port <1024 to prevent some attacks.
 # ----------------------------------------------------------------
@@ -309,21 +309,21 @@ fi
  "$nft" 'add rule ip yuki-script prerouting ct state invalid,untracked counter drop'
 
 # Limit connection establishing rate and total connections per each IP address to mitigate attacks like "Socket/Handshake/Slowloris".
- "$nft" add rule ip yuki-script prerouting ip protocol tcp ct state new limit rate 100/second drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp ct state new limit rate 100/second counter drop
  "$nft" 'add set ip yuki-script connlimit0 { type ipv4_addr; flags dynamic; }'
  "$nft" 'add rule ip yuki-script prerouting ip protocol tcp add @connlimit0 { ip saddr ct count over 50 } counter drop'
 
 # Perform stateful checking to drop packets with CT state NEW but not SYN.
 # This check is a bit heavy, if you have problems with CPU usage, try to remove this rule.
 # ----------------------------------------------------------------
- "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags ! syn ct state new drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp tcp flags ! syn ct state new counter drop
 
 # Perform MSS checking for each TCP packet. Drop, if MSS is higher than 1460 bytes or less than 536.
 # You might need to adjust these rules. Also, if you don't use Jumbo Frames, you can set the maximum MSS to 1460.
 # only for a interface
 # ----------------------------------------------------------------
- "$nft" 'add rule ip yuki-script prerouting ip protocol tcp tcp option maxseg size > 8946 drop'
- "$nft" 'add rule ip yuki-script prerouting ip protocol tcp tcp option maxseg size < 536 drop'
+ "$nft" 'add rule ip yuki-script prerouting ip protocol tcp tcp option maxseg size > 8946 counter drop'
+ "$nft" 'add rule ip yuki-script prerouting ip protocol tcp tcp option maxseg size < 536 counter drop'
 
 # Advanced ruleset.
 # Not recommended to use until it's fully converted to nftables.
@@ -386,7 +386,7 @@ fi
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m u32 --u32 "12&0xFFFF=0x0" -j DROP
 
 # Length filter. Allows only packets with correct length.
-# The two first rules are configured for 1500 
+# The two first rules are configured for 1500
 # Maximum is 1500, but you can have 9000 MTU - and in this case, you should set 9000 as the maximum value.
 # "$IP" -t raw -A PREROUTING -p tcp -m length ! --length 40:1500 -j DROP
 # "$IP" -t raw -A PREROUTING -p udp -m length ! --length 20:1500 -j DROP
@@ -544,12 +544,13 @@ fi
 
 # If you want to enable logging to dmesg, uncomment the following first rule:
 
+# [WASN'T TESTED]
 # The rule below enables logging with the limit of 5 messages per second:
 # "$IP" -A INPUT -m limit --limit 5/m -j LOG --log-prefix "[yuki-script] DROP:" --log-ip-options --log-tcp-options --log-tcp-sequence
 
 # The rules below actually drop packets:
- "$nft" add rule ip yuki-script prerouting drop
- "$nft" add rule ip yuki-script prerouting ip protocol tcp drop
+ "$nft" add rule ip yuki-script prerouting counter drop
+ "$nft" add rule ip yuki-script prerouting ip protocol tcp counter drop
 
 # Sysctl.conf tweaks.
 # --------------------------------
@@ -627,7 +628,7 @@ echo -e "
  net.netfilter.nf_conntrack_tcp_loose = 0               # Turn on strict TCP mode for conntrack.
  net.netfilter.nf_conntrack_tcp_ignore_invalid_rst = 1  # Ignore invalid RST packets.
  net.netfilter.nf_conntrack_checksum = 0                # Don't perform checksum calculations by NF.
- net.ipv4.tcp_mtu_probing = 1                           # Use TCP MTU probing when an ICMP blackhole is detected.
+ net.ipv4.tcp_mtu_probing = 2                           # Always use TCP MTU Probing (Good for bandwidth in some cases).
  kernel.unprivileged_userns_clone = 0                   # Don't allow unprivileged user namespaces.
  net.ipv4.tcp_thin_linear_timeouts = 1                  # Enable dynamic triggering of thin linear timeouts (for lower retrans latencies)
  net.ipv4.conf.all.ignore_routes_with_linkdown = 1      # Ignore [IPv4] routes via interfaces that are down. Good for additional reliability.
@@ -638,7 +639,7 @@ echo -e "
  net.core.bpf_jit_harden = 1                            # BPF-JIT Hardening.
  net.ipv4.conf.all.drop_unicast_in_l2_multicast = 1     # Drop IPv4 unicast packets encapsulated in link-layer multicast/broadcast frames.
  net.ipv6.conf.all.drop_unicast_in_l2_multicast = 1     # Drop IPv6 unicast packets encapsulated in link-layer multicast/broadcast frames.
- net.ipv4.conf.all.arp_filter = 1                       # ARP Protection (filter). 
+ net.ipv4.conf.all.arp_filter = 1                       # ARP Protection (filter).
  net.ipv4.conf.all_arp_ignore = 1                       # Reply to an ARP request only if the target IP address is local address configured on the incoming interface.
  net.ipv4.tcp_shrink_window = 1                         # Shrink TCP RWIN when it's necessary. Good for stability and performance.
  net.ipv4.tcp_tw_reuse = 1                              # Reuse TIME_WAIT sockets for new TCP connections. Good for performance.
@@ -647,11 +648,11 @@ echo -e "
 
 # Exclusive tweaks.
 # ----------------------------------------------------------------
- # kernel.io_delay_type = 0           # On newer systems, I/O delay is useless, so we can turn it off.
- # kernel.nmi_watchdog = 0            # Turn off NMI watchdog, if not needed.
- # fs.mqueue.queues_max = 512         # Increase the limit of queues for block devices. Very good for NVMe SSDs.
- # vm.numa_stat = 0                   # Turn off NUMA statistics.
- # vm.memfd_noexec = 1                # Don't allow execution of memory-backed files created with 'memfd_create()' (for security).
+  kernel.io_delay_type = 0           # On newer systems, I/O delay is useless, so we can turn it off.
+  kernel.nmi_watchdog = 0            # Turn off NMI watchdog, if not needed.
+  fs.mqueue.queues_max = 512         # Increase the limit of queues for block devices. Very good for NVMe SSDs.
+  vm.numa_stat = 0                   # Turn off NUMA statistics.
+  vm.memfd_noexec = 1                # Don't allow execution of memory-backed files created with 'memfd_create()' (for security).
 " > /etc/sysctl.conf
 
 "$SC" -p > /dev/null 2>&1 &

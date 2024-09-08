@@ -2,54 +2,21 @@
 
 ### 📥 Ubuntu Installation
 ```
-sudo apt update && sudo apt remove ufw && sudo apt install netfilter-persistent nftables git xtables-addons-common -y && git clone -b beta https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
+sudo apt update && sudo apt remove ufw -y && sudo apt install netfilter-persistent nftables git xtables-addons-common -y && git clone -b beta https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
 ``` 
 
 ### 📋 Requirements
 - Bash
 - Ubuntu 20.04+ (24.04 and newer is recommended), [BETA] Debian 11+
-###### Requirements for optional (advanced) rules: iptables, ebtables, arptables, xtables-addons-common (it is needed for antiSpoof rules)
-<hr>
-
-### ⛔ Mitigated attack types:
-- [x] [TCP SYN Flood](https://github.com/yuk1c/antiddos/wiki/TCP-SYN-Flood)
-- [x] [TCP Out-Of-State Flood](https://github.com/yuk1c/antiddos/wiki/TCP-Out%E2%80%90Of%E2%80%90State)
-- [x] [TCP SYN-ACK Flood/TCP Reflection](https://github.com/yuk1c/antiddos/wiki/TCP-SYN-ACK-Flood)
-- [x] [Spoofed attacks](https://github.com/yuk1c/antiddos/wiki/Spoofing-or-Fraggle-attacks)
-- [x] [UDP Flood](https://github.com/yuk1c/antiddos/wiki/UDP-Flood)
-- [x] [ICMP Flood & PoD](https://github.com/yuk1c/antiddos/wiki/ICMP-Flood)
-- [x] [GREIP, ESP, AH, IGMP Floods](https://github.com/yuk1c/antiddos/wiki/GREIP-and-ESP-and-AH-and-IGMP-Floods)
-- [x] [Many sophisticated TCP attacks](https://github.com/yuk1c/antiddos/wiki/TCP-Sophiscated-Attacks)
-- [x] [HANDSHAKE & Slowloris attacks](https://github.com/yuk1c/antiddos/wiki/HANDSHAKE-&-Slowloris-Attacks)
-- [x] [Amplification DDoS](https://github.com/yuk1c/antiddos/wiki/Amplified-DDoS)
-- [x] [Null Payload Flood](https://github.com/yuk1c/antiddos/wiki/Null-Payload-Flood)
+###### Requirements for optional (advanced) rules: iptables, ebtables, arptables
+###### Requirements for the monitoring.py script: python3
 
 <hr>
-
-### ✨ Advanced RuleSet Features:
-- [ ] BitTorrent Amplification blocking
-- [ ] SIP Scanning blocking
-- [ ] SSLv2/SSLv3 HTTPS blocking
-- [ ] HTTP Trace method blocking
-- [ ] FTP SITE EXEC blocking
-- [ ] SQLi Blocking
-- [ ] Advanced Spoofing blocking
-- [ ] DNS/NTP Filtering
-- [ ] IP Option Filter
-- [ ] HTTP Filter
-- [ ] SSH Filter/Whitelist
-- [ ] OpenVPN Filter/Whitelist
-- [ ] IPtables proxying
-- [ ] SYN/ACK Challenge
-- [ ] Zero TTL Blocking
-- [ ] SourcePort 1 or 0 Blocking
-- [ ] STUN Blocking 
 
 ### 🔄 Updating the script:
 ```
 cd ~/antiddos && git pull && sudo ./antiddos-yuki && cd
 ```
-
 <hr>
 
 ### 💾 Saving the rules:
@@ -58,8 +25,14 @@ sudo netfilter-persistent save
 ```
 ###### You need to execute this for the rules to persist across reboots.
 
+### [NEW] 🔍 Real-time monitoring:
+```
+sudo python3 monitoring.py
+```
+###### You need to have python3 installed for it to work properly.
+
 ### ✅ Opening ports:
-<code>sudo nft add rule ip yuki-script prerouting tcp dport <port> accept</code>
+<code>sudo nft add rule ip yuki-script prerouting tcp dport [port] accept</code>
 ###### Example: sudo nft add rule ip yuki-script prerouting tcp dport 1194 accept (this is how a rule will look that allows incoming TCP to port 1194)
 ###### (after adding custom rules, you need to test everything - if the rules work as expected, you can save them, so they will persist across reboots) 
 ###### 22/tcp (SSH default port) is already allowed so you won't lose connection to your server. Edit this in the config before running the script if your SSH is running on a different port.

@@ -2,7 +2,7 @@
 
 ### 📥 Ubuntu Installation
 ```
-sudo apt update && sudo apt remove ufw && sudo apt install netfilter-persistent nftables git xtables-addons-common -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
+sudo apt update && sudo apt remove ufw && sudo apt install netfilter-persistent nftables git xtables-addons-common -y && git clone -b beta https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
 ``` 
 
 ### 📋 Requirements

@@ -4,96 +4,13 @@
 
 # --------------------------------
 
-# Execute the contents of config.sh in the current context.
-# Needed to import and use the config file.
-. config.sh
+# Check where's the script located.
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Functions.
-
-print_default() {
-    # For printing gradient messages with auto-fallback.
-	if command -v lolcat &>/dev/null; then
-		echo -e "$1" | lolcat
-	else
-		echo -e "${BGray}$1"
-	fi
-}
-
-print_default2() {
-    # For printing gray messages.
-    echo -e "${BGray}$1"
-}
-
-print_success() {
-    # For printing gradient success messages with auto-fallback.
-	if command -v lolcat &>/dev/null; then
-		echo -e "✓ Success. $1" | lolcat
-	else
-		echo -e "${BGray}✓ Success. $1"
-	fi
-}
-
-print_warning() {
-    # For printing gradient warning messages with auto-fallback.
-    if command -v lolcat &>/dev/null; then
-        echo -e "⚠︎ Warning: $1" | lolcat >&2
-    else
-        echo -e "${BGray}⚠︎ Warning: $1" >&2
-    fi
-}
-
-print_error() {
-    # For printing gradient error messages with auto-fallback.
-	if command -v lolcat &>/dev/null; then
-		echo -e "✗ Fail. $1" | lolcat >&2
-	else
-		echo -e "${BRed}✗ Fail. $1" >&2
-	fi
-}
-
-rootcheck() {
-    if [[ $EUID -ne 0 ]]; then
-        print_warning "This script must be run as root. Restarting with sudo/su..."
-
-        if command -v sudo &> /dev/null; then
-            print_default2 "Automatic choice: 'sudo' was selected and will be used."
-            # shellcheck disable=SC2128
-            sudo -E "$SHELL" "$BASH_SOURCE" "$@"
-            exit $?
-        elif command -v su &> /dev/null; then
-            print_default2 "Automatic choice: 'su' was selected and will be used."
-            # shellcheck disable=SC2128
-            script_path="$(readlink -f "$BASH_SOURCE")"
-            su -c "$script_path" "$@"
-            exit $?
-        else
-            print_error "Automatic choice failed: neither sudo nor su was found. Exiting."
-            exit 1
-        fi
-    fi
-}
-
-accidental_start_prevention() {
-    print_default "Accidental start prevention: press 'enter' within 5 seconds to continue, CTRL+C to cancel."
-
-    for counter in {1..5}; do
-        if IFS= read -rt 1 -N 1 key; then
-            case $key in
-                $'\n') print_success "Starting the script..." && return ;;
-                $'\x03') print_default2 "Ctrl+C detected. Exiting..." && exit 130 ;;
-            esac
-        fi
-    done
-
-    print_default2 "\nNo response within 5 seconds. Exiting..."
-    exit 0
-}
-
-cleanup() {
-    print_default "Received CTRL+C. Exiting..."
-    tput sgr0
-    exit 130
-}
+# Execute the contents of the config/functions files in the current contxt.
+# It's needed for the script to work properly.
+source "$script_dir/config.sh"           # Import config.sh
+source "$script_dir/functions.sh"        # Import functions.sh
 
 # ----------------------------------
 # Call the accidental start prevention function.
@@ -114,13 +31,13 @@ if [ "$1" != "--skip-distro-check" ]; then
         print_error "Failed to determine the distribution. Make sure lsb-release is installed or /etc/os-release is accessible. If you're sure this is an error, use --skip-distro-check."
         exit 1
     fi
-    
+
     case "$distro" in
         "Ubuntu" | "Debian")
             # The distribution is supported, no output.
             ;;
         *)
-            print_error "Your distribution ($distro) is not supported. If you're sure this is an error, use --skip-distro-check and report it by opening an issue on GitHub."
+            print_error "Your distribution ($distro) is not supported. If you're sure this is a mistake, use --skip-distro-check and report it by opening an issue on GitHub."
             exit 1
             ;;
     esac
@@ -128,7 +45,7 @@ fi
 
 # Check if all dependencies are installed.
 
-dependencies=("nftables" "netfilter-persistent" "git")
+dependencies=("nftables" "xtables-addons-common" "git")
 missing_dependencies=()
 for dep in "${dependencies[@]}"; do
     if ! dpkg -s "$dep" &>/dev/null; then
@@ -136,18 +53,18 @@ for dep in "${dependencies[@]}"; do
     fi
 done
 
-# If there are missing dependencies, prompt the user to install them
+# If there are missing dependencies, prompt the user to install them.
 if [ "${#missing_dependencies[@]}" -gt 0 ]; then
     print_warning "The following dependencies are missing: ${missing_dependencies[*]}"
-    
-    # Check if user has sudo privileges
+
+    # Check if user has sudo privileges.
     if sudo -v >/dev/null 2>&1; then
         print_default2 "Do you want to install them with sudo? (y/n)"
 
         read -r install_response
         case "$install_response" in
             [yY])
-                # Install missing dependencies
+                # Install missing dependencies.
                 apt install "${missing_dependencies[@]}" -y
                 ;;
             [nN])
@@ -169,7 +86,7 @@ if [ "${#missing_dependencies[@]}" -gt 0 ]; then
 fi
 
 # Various checks of the config file.
-config_file="config.sh"
+config_file="$script_dir/config.sh"
 github_repo="https://raw.githubusercontent.com/yuk1c/antiddos/beta"
 
 check_config() {
@@ -205,33 +122,30 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
-# Store the script's directory.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # If --skip_update_check is not present, check for updates.
 if [ "$SKIP_UPDATE_CHECK" != "true" ]; then
     # Go to the script's directory
-    cd "$SCRIPT_DIR"
+    cd "$script_dir" || print_error "Cannot cd."
 
     # Fetch updates from the remote repository.
     git fetch
 
     # Compare local branch with the remote branch.
-    if [ "$(git rev-parse HEAD)" != "$(git rev-parse @{u})" ]; then
+    if [ "$(git rev-parse HEAD)" != "$(git rev-parse @"{u}")" ]; then
         print_default "Updates available. Do you want to upgrade the script to continue? (y/n)"
-        
+
         read -r response
         case "$response" in
             [yY])
-                # Attempt to pull updates, handle errors quietly
+                # Attempt to pull updates, handle errors quietly.
                 if ! git pull -q origin beta; then
                     print_error "Unable to update script. You can skip the update check with the '--skip-update-check' argument if you think this is an mistake."
                     exit 1
                 fi
 
                 print_success "Script updated. Restarting..."
-                exec "$SCRIPT_DIR/$(basename "$0")" "$@"  # Restart the updated script with the original arguments
-                exit 0  # Make sure to exit after the exec command
+                exec "$script_dir/$(basename "$0")" "$@"    # Restart the updated script with the original arguments.
+                exit 0  # Make sure to exit after the exec command.
                 ;;
 
             [nN])
@@ -264,7 +178,7 @@ fi
  "$nft" add rule ip yuki-script prerouting tcp dport "$SSH" counter accept
 
 # If you need to allow a protocol, use this template:
-# "$NFT" add rule ip yuki-script input ip protocol <protocol> accept
+# "$nft" add rule ip yuki-script input ip protocol <protocol> accept
 # Can be anything from /etc/protocols.
 
 # --------------------------------
@@ -286,11 +200,11 @@ fi
 
 # Mitigate UDP Floods with a ratelimit.
 # ----------------------------------------------------------------
- "$nft" 'add rule ip yuki-script prerouting ip protocol udp meter udp-flood-limit { ip saddr limit rate over 3003/second } counter drop'
+ "$nft" 'add rule ip yuki-script prerouting ip protocol udp meter udp-flood-limit { ip saddr limit rate over 3000/second } counter drop'
 
 # Mitigate ICMP Floods with a ratelimit. Also, block some ICMP types for enhanced security.
 # ----------------------------------------------------------------
- "$nft" 'add rule ip yuki-script prerouting ip protocol icmp meter icmp-limit { ip saddr limit rate over 2/second burst 2 packets } counter drop'
+ "$nft" 'add rule ip yuki-script prerouting ip protocol icmp meter icmp-limit { ip saddr limit rate over '"$IPL"' } counter drop'
  "$nft" 'add rule ip yuki-script prerouting icmp type address-mask-request counter drop'
  "$nft" 'add rule ip yuki-script prerouting icmp type router-solicitation counter drop'
  "$nft" 'add rule ip yuki-script prerouting icmp type timestamp-request counter drop'
@@ -354,7 +268,7 @@ fi
 # "$IP" -t raw -A PREROUTING -p tcp -m multiport --dports "$HTTP" -m string ! --string "HTTP/1.1 OK" --algo kmp -j DROP
 
 # Block malformed DNS Flood.
-# These rules are tested well, and can be used if you experience a lot of DNS amplification attacks. 
+# These rules are tested well, and can be used if you experience a lot of DNS amplification attacks.
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --string "Refused" --algo bm -j DROP
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --string "0000000000000000" --algo bm -j DROP
 # "$IP" -t raw -A PREROUTING -p udp --sport 53 -m string --hex-string "|3000300030003000300030003000300030003000300030003000|" --algo bm -j DROP
@@ -523,7 +437,7 @@ fi
 # Limit connection establishing speed. (per source IP) (we don't use --rsource because it is already set by default)
 # Limiting upto 30 SYN_RECV per 5 seconds from each new IP.
 # "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --set
-# "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --update --rcheck --rttl --seconds 5 --hitcount 30 
+# "$IP" -t raw -A PREROUTING -p tcp --syn -m conntrack --ctstate NEW -m recent --update --rcheck --rttl --seconds 5 --hitcount 30
 
 # Filtering by source IP address routing type.
 # It wasn't tested a lot and can do nothing.
@@ -558,8 +472,8 @@ fi
 # Backup management.
 # Note: the backups are located in /etc/sysctl_backups/.
 
-# If the backup directory is not exist, create it.
-# If cannot create it - show an error and exit.
+# If the backup directory does not exist, create it.
+# If cannot create it - show aa error and exit.
 if [ ! -d "$backup_dir" ]; then
     if ! mkdir -p "$backup_dir"; then
         print_error "Cannot create backup directory: $backup_dir" >&2
@@ -648,23 +562,22 @@ echo -e "
 
 # Exclusive tweaks.
 # ----------------------------------------------------------------
-  kernel.io_delay_type = 0           # On newer systems, I/O delay is useless, so we can turn it off.
-  kernel.nmi_watchdog = 0            # Turn off NMI watchdog, if not needed.
-  fs.mqueue.queues_max = 512         # Increase the limit of queues for block devices. Very good for NVMe SSDs.
-  vm.numa_stat = 0                   # Turn off NUMA statistics.
-  vm.memfd_noexec = 1                # Don't allow execution of memory-backed files created with 'memfd_create()' (for security).
+ kernel.io_delay_type = 0           # On newer systems, I/O delay is useless, so we can turn it off.
+ kernel.nmi_watchdog = 0            # Turn off NMI watchdog, if not needed.
+ vm.memfd_noexec = 1                # Don't allow execution of memory-backed files created with 'memfd_create()' (for security).
+ vm.numa_stat = 0                   # Turn off NUMA statistics.
 " > /etc/sysctl.conf
 
-"$SC" -p > /dev/null 2>&1 &
-systemctl enable --now netfilter-persistent > /dev/null 2>&1 &
+echo "flush ruleset" > /etc/nftables.conf > /dev/null 2>&1
+"$nft" -o list ruleset >> /etc/nftables.conf > /dev/null 2>&1 &
+systemctl enable nftables > /dev/null 2>&1 &
+"$sc_reload" > /dev/null 2>&1 &
 
-clear; print_default "BETA VERSION!!!"
-print_success "All changes, except for ruleset saving, were done.\
- Now, make sure your networking is okay, if yes - do 'netfilter-persistent save'."
-print_default2 "Note: The 'Drop' policy drops all incoming traffic that isn't explicitly allowed (SSH is already allowed).
-If you need to allow a specific TCP port: 'nft add rule ip yuki-script prerouting tcp dport <port> accept'
-For UDP ports, use: 'nft add rule ip yuki-script prerouting udp dport <port> accept'
-You can also view the current ruleset and its statistics with: 'nft list ruleset'"
+clear; print_warning "This is a beta version!"
+print_success "All changes were applied and rules will persist across reboots."
+print_default2 "\nMake sure your network works okay. For example, ping something, do 'sudo apt update', and open another SSH session (if applicable)."
+print_default2 "If you have some problems = sudo systemctl disable nftables, and restart the server."
+print_default2 "\nThere's a guide in the script' readme on how to allow specific ports and more cool stuff, take a look."
 
 tput sgr0 # Reset terminal color. We use this to prevent the terminal from being colored after the script exits.
 exit 0 # Exit.

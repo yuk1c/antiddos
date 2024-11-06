@@ -2,8 +2,9 @@
 
 ### 📥 Ubuntu Installation
 ```
-sudo apt update && sudo apt remove ufw -y && sudo apt install netfilter-persistent nftables git xtables-addons-common -y && git clone -b beta https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
+sudo apt update && sudo apt purge ufw netfilter-persistent -y && sudo apt install nftables git xtables-addons-common -y && git clone -b beta https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
 ``` 
+##### It'll completely remove UFW and netfilter-persistent from your system to prevent conflicts, so make sure it won't affect anything in a bad way.
 
 ### 📋 Requirements
 - Bash

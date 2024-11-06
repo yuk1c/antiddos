@@ -33,7 +33,7 @@ print_warning() {
 print_error() {
     # For printing gradient error messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
-		echo -e "✗ Fail. $1" | lolcat >&2
+		echo -e "✗ Error. $1" | lolcat >&2
 	else
 		echo -e "${BRed}✗ Fail. $1" >&2
 	fi
@@ -64,17 +64,22 @@ rootcheck() {
 accidental_start_prevention() {
     print_default "Accidental start prevention: press 'enter' within 5 seconds to continue, CTRL+C to cancel."
 
-    for IFS in {1..5}; do
-        if IFS= read -rt 1 -N 1 key; then
+    for _ in {1..5}; do
+        stty -echo
+        if read -rt 5 -N 1 key; then
+            stty echo
             case $key in
-                $'\n') print_success "Starting the script..." && return ;;
+                $'\n') print_default2 "Starting the script..." && return 0 ;;
                 $'\x03') print_default2 "Ctrl+C detected. Exiting..." && exit 130 ;;
+                *) print_error "Invalid input. Try again." ;;
             esac
+        else
+            stty echo
+            print_default2 "No input detected in 5 seconds. Exiting..." && exit 1
         fi
     done
 
-    print_default2 "\nNo response within 5 seconds. Exiting..."
-    exit 0
+    print_warning "Maximum attempts reached. Exiting..." && exit 1
 }
 
 cleanup() {

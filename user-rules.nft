@@ -1,0 +1,48 @@
+# User-defined rules.
+# They are applied after all the default rules.
+# Templates:
+
+##########################
+# Layer4 OSI Model Rules #
+##########################
+
+# Allow your SSH by default:
+add rule ip yuki-script prerouting tcp dport 22 counter accept
+
+# Minecraft server:
+# add rule ip yuki-script prerouting tcp dport 25565 counter accept
+
+# SSH on port 2222:
+# add rule ip yuki-script prerouting tcp dport 2222 counter accept
+
+# Allow HTTP:
+# add rule ip yuki-script prerouting tcp dport 80 counter accept
+
+# Allow HTTPS:
+# add rule ip yuki-script prerouting tcp dport 443 counter accept
+
+# Allow WireGuard:
+# add rule ip yuki-script prerouting udp dport 51820 counter accept
+
+# Allow OpenVPN [TCP]:
+# add rule ip yuki-script prerouting tcp dport 1194 counter accept
+
+# Allow OpenVPN [UDP]:
+# add rule ip yuki-script prerouting udp dport 1194 counter accept
+
+##########################
+# Layer3 OSI Model Rules #
+##########################
+
+# Allow IGMP:
+# add rule ip yuki-script prerouting igmp counter accept
+
+# Allow GRE:
+# add rule ip yuki-script prerouting gre counter accept
+
+# Allow IPsec:
+# add rule ip yuki-script prerouting ah counter accept
+# add rule ip yuki-script prerouting esp counter accept
+
+# Drop everything that wasn't allowed explicitly.
+add rule ip yuki-script prerouting counter drop

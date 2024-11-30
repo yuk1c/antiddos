@@ -1,4 +1,12 @@
+check_argument() {
+    if [ -z "$1" ]; then
+        echo "Error: Missing argument." >&2
+        return 1
+    fi
+}
+
 print_default() {
+    check_argument "$1" || return 1
     # For printing gradient messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
 		echo -e "$1" | lolcat
@@ -13,6 +21,7 @@ print_default2() {
 }
 
 print_success() {
+    check_argument "$1" || return 1
     # For printing gradient success messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
 		echo -e "✓ Success. $1" | lolcat
@@ -22,6 +31,7 @@ print_success() {
 }
 
 print_warning() {
+    check_argument "$1" || return 1
     # For printing gradient warning messages with auto-fallback.
     if command -v lolcat &>/dev/null; then
         echo -e "⚠︎ Warning: $1" | lolcat >&2
@@ -31,6 +41,7 @@ print_warning() {
 }
 
 print_error() {
+    check_argument "$1" || return 1
     # For printing gradient error messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
 		echo -e "✗ Error. $1" | lolcat >&2
@@ -43,19 +54,24 @@ rootcheck() {
     if [[ $EUID -ne 0 ]]; then
         print_warning "This script must be run as root. Restarting with sudo/su..."
 
+        if [[ -n "${SUDO_USER:-}" ]]; then
+            print_error "The script is already running with sudo privileges."
+            exit 1
+        fi
+
         if command -v sudo &> /dev/null; then
-            print_default2 "Automatic choice: 'sudo' was selected and will be used."
-            # shellcheck disable=SC2128
-            sudo -E "$SHELL" "$BASH_SOURCE" "$@"
+            print_default2 "Using 'sudo' for automatic elevation."
+            sudo -E bash "$0" "$@"
             exit $?
+
         elif command -v su &> /dev/null; then
-            print_default2 "Automatic choice: 'su' was selected and will be used."
-            # shellcheck disable=SC2128
-            script_path="$(readlink -f "$BASH_SOURCE")"
-            su -c "$script_path" "$@"
+            print_default2 "Using 'su' for automatic elevation."
+            script_path="$(readlink -f "$0")"
+            su -c "$script_path ${@}"
             exit $?
+
         else
-            print_error "Automatic choice failed: neither sudo nor su was found. Exiting."
+            print_error "Neither sudo nor su were found. Exiting."
             exit 1
         fi
     fi

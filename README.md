@@ -23,16 +23,16 @@ Also, you can use the script on your Linux laptop, for example, so you'll care l
 
 <hr>
 
-### 🔄 Quick Update
+### Quick Update
 ```
 cd ~/antiddos && git pull && sudo ./antiddos-yuki && cd
 ```
 
-### 🔍 Real-time monitoring
+### Real-time monitoring
 ```
 sudo python3 monitoring.py
 ```
 
-### ✅ Opening ports
-It's recommended to allow the ports right in the script. Here's an example of a rule (allow TCP to port 25565, for Minecraft servers): <code>"$nft" add rule ip yuki-script prerouting <u>tcp</u> dport <u>25565</u> counter accept</code>
-Just add your custom rules before the basic ruleset and restart it.
+### Opening ports
+Add a rule to the beginning of the user-rules.nft file. Here's an example of one: (allow TCP to port 25565, for Minecraft servers) <code>add rule ip yuki-script prerouting <u>tcp</u> dport <u>25565</u> counter accept</code>
+There are already some pre-defined rules; just uncomment needed and re-apply the script.

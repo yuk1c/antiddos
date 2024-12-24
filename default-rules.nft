@@ -44,7 +44,7 @@ table ip yuki-script {
 
 		# Limit connection establishing rate per each IP address to mitigate attacks like "Socket/Handshake/Slowloris".
 		# ========================================
-			ip protocol tcp ct state new limit rate 60/minute burst 3 packets log prefix "[yuki-script] Connection rate-limit triggered: " level debug limit rate 1/minute counter accept
+			ip protocol tcp ct state new limit rate 3/second log prefix "[yuki-script] Connection rate-limit triggered: " level debug limit rate 1/minute counter drop
 
 		# Stateful TCP filters.
 		# ========================================

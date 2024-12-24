@@ -107,7 +107,7 @@ if [ "${SKIP_UPDATE_CHECK:-}" != "true" ]; then
     cd "$script_dir" || print_error "Cannot cd."
 
     # Fetch updates with a timeout of 3 seconds.
-    if ! timeout 3 git fetch; then
+    if ! timeout 1.5 git fetch; then
         print_error "Git fetch timed out or failed. Use the '--skip-update-check' argument."
         exit 1
     fi
@@ -175,7 +175,7 @@ fi
 # After you uninstall the script, they aren't deleted and are still kept there.
 
 # If the backup directory does not exist, create it.
-# If cannot create it - show aa error and exit.
+# If cannot create it - show an error and exit.
 if [ ! -d "$backup_dir" ]; then
     if ! mkdir -p "$backup_dir"; then
         print_error "Cannot create backup directory: $backup_dir" >&2
@@ -183,7 +183,17 @@ if [ ! -d "$backup_dir" ]; then
     fi
 fi
 
-# Make a backup of the sysctl.conf.
+# If the backup file exists, check if the contents of the sysctl.conf file have changed.
+# If contents are the same, skip creating a new backup.
+if [ -f "$backup_file" ]; then
+    # Compare the current sysctl.conf with the existing backup using cmp
+    if cmp -s "$sysctl_conf" "$backup_file"; then
+        echo "No changes detected in sysctl.conf, skipping backup."
+        exit 0
+    fi
+fi
+
+# Make a backup of the sysctl.conf file.
 # If cannot create it - show an error and exit.
 if ! cp "$sysctl_conf" "$backup_file"; then
     print_error "Failed to create backup." >&2
@@ -202,15 +212,19 @@ fi
 # Apply the tweaked sysctl.conf file.
 cat "$script_dir/sysctl.conf" > /etc/sysctl.conf &
 
+# Save the current nftables.conf file.
+"$nft" -o list ruleset | tee /etc/nftables.conf > /dev/null &
+
 # Enable and start the nftables service so the rules won't get reset after reboots.
 systemctl enable --now nftables > /dev/null &
 
-# Reload the sysctl.conf file.
-eval "$sc_reload" > /dev/null || { print_error "Cannot apply the sysctl.conf tweaks using the '"$sc_reload"' command."; exit 1; } &
+# Apply the sysctl.conf tweaks and make them permanent.
+if ! cmp -s "$script_dir/sysctl.conf" "$sysctl_conf"; then
+    cp "$script_dir/sysctl.conf" "$sysctl_conf" &
+    eval "$sc_reload" "$script_dir/sysctl.conf" >/dev/null 2>&1 || print_error "Cannot apply the sysctl.conf tweaks."
+fi
 
 # Time calculation stuff.
-end_time=$(date +%s%3N) && elapsed_time=$((end_time - start_time))
-
-print_success "The script was installed. Took ≈ ${elapsed_time} milliseconds."
+end_time=$(date +%s%3N) && elapsed_time=$((end_time - start_time)) && print_success "The script was installed. Took ≈ ${elapsed_time} milliseconds."
 
 tput sgr0 # Reset the terminal color.

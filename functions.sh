@@ -70,7 +70,7 @@ rootcheck() {
             print_default2 "Using 'su' for automatic elevation."
             tput sgr0
             script_path="$(readlink -f "$0")"
-            su -c "$script_path ${@}"
+            su -c "$script_path" -- "${@}"
             exit $?
 
         else

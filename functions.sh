@@ -56,22 +56,26 @@ rootcheck() {
 
         if [[ -n "${SUDO_USER:-}" ]]; then
             print_error "The script is already running with sudo privileges."
+            tput sgr0
             exit 1
         fi
 
         if command -v sudo &> /dev/null; then
             print_default2 "Using 'sudo' for automatic elevation."
+            tput sgr0
             sudo -E bash "$0" "$@"
             exit $?
 
         elif command -v su &> /dev/null; then
             print_default2 "Using 'su' for automatic elevation."
+            tput sgr0
             script_path="$(readlink -f "$0")"
             su -c "$script_path ${@}"
             exit $?
 
         else
             print_error "Neither sudo nor su were found. Exiting."
+            tput sgr0
             exit 1
         fi
     fi

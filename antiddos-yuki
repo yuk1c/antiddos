@@ -120,7 +120,7 @@ if [ "${SKIP_UPDATE_CHECK:-}" != "true" ]; then
         case "$response" in
             [yY])
                 # Attempt to pull updates, handle errors quietly.
-                if ! git pull -q origin beta; then
+                if ! git pull; then
                     print_error "Unable to update script. You can skip the update check with the '--skip-update-check' argument if you think this is an mistake."
                     exit 1
                 fi

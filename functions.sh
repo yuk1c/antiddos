@@ -89,7 +89,7 @@ accidental_start_prevention() {
         if read -rt 5 -N 1 key; then
             stty echo
             case $key in
-                $'\n') print_default2 "Starting the script..." && return 0 ;;
+                $'\n') return 0 ;;
                 $'\x03') print_default2 "Ctrl+C detected. Exiting..." && exit 130 ;;
                 *) print_error "Invalid input. Try again." ;;
             esac

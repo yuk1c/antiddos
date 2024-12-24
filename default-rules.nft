@@ -13,7 +13,7 @@ table ip yuki-script {
 		# Allow the local interface and block spoofing.
 		# ========================================
 			iif "lo" ip saddr 127.0.0.0/8 accept
-			ip saddr 127.0.0.0/8 iif != "lo" log prefix "[yuki-script] Possible Spoofing: " level debug limit rate 3/minute burst 5 packets counter drop
+			ip saddr 127.0.0.0/8 iif != "lo" log prefix "[yuki-script] Possible Spoofing: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# Allow valid conntrack states.
 		# ========================================
@@ -21,9 +21,9 @@ table ip yuki-script {
 
 		# Combat some TCP flood attacks by applying rate-limits.
 		# ========================================
-			tcp flags syn limit rate over 4/second burst 5 packets log prefix "[yuki-script] Possible SYN Flood: " level debug limit rate 3/minute burst 5 packets counter drop
-			tcp flags syn,ack limit rate over 4/second burst 5 packets log prefix "[yuki-script] Possible SYN-ACK Flood: " level debug limit rate 3/minute burst 5 packets counter drop
-			tcp flags rst,ack limit rate over 2/second burst 5 packets log prefix "[yuki-script] Possible RST-ACK Flood: " level debug limit rate 3/minute burst 5 packets counter drop
+			tcp flags syn limit rate over 4/second burst 5 packets log prefix "[yuki-script] Possible SYN Flood: " level debug limit rate 1/minute burst 5 packets counter drop
+			tcp flags syn,ack limit rate over 4/second burst 5 packets log prefix "[yuki-script] Possible SYN-ACK Flood: " level debug limit rate 1/minute burst 5 packets counter drop
+			tcp flags rst,ack limit rate over 2/second burst 5 packets log prefix "[yuki-script] Possible RST-ACK Flood: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# Allow only legitimate TCP flags and their combinations.
 		# ========================================
@@ -31,7 +31,7 @@ table ip yuki-script {
 
 		# Mitigate UDP Floods with a ratelimit.
 		# ========================================
-			ip protocol udp meter udp-flood-limit size 65535 { ip saddr limit rate over 3200/second burst 5 packets } log prefix "[yuki-script] Possible UDP Flood: " level debug limit rate 3/minute burst 5 packets counter drop
+			ip protocol udp meter udp-flood-limit size 65535 { ip saddr limit rate over 3200/second burst 5 packets } log prefix "[yuki-script] Possible UDP Flood: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# ICMP type whitelisting with state tracking and rate-limiting.
 		# ========================================
@@ -42,32 +42,32 @@ table ip yuki-script {
 
 		# Drop SYN packets with source-port <1024 to prevent some attacks.
 		# ========================================
-			tcp sport != 1024-65535 tcp flags syn / fin,syn,rst,ack log prefix "[yuki-script] Invalid TCP SYN Source port: " level debug limit rate 3/minute burst 5 packets counter drop
+			tcp sport != 1024-65535 tcp flags syn / fin,syn,rst,ack log prefix "[yuki-script] Invalid TCP SYN Source port: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# Drop all packets with bad states.
 		# ========================================
-			ct state invalid,untracked log prefix "[yuki-script] Bad packet state: " level debug limit rate 3/minute burst 5 packets counter drop
+			ct state invalid,untracked log prefix "[yuki-script] Bad packet state: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# Limit connection establishing rate and total connections per each IP address to mitigate attacks like "Socket/Handshake/Slowloris".
 		# ========================================
-			ip protocol tcp ct state new limit rate 60/minute burst 3 packets log prefix "[yuki-script] Connection rate-limit triggered: " level debug limit rate 3/minute burst 5 packets counter accept
-			ip protocol tcp add @connlimit0 { ip saddr ct count over 16 } log prefix "[yuki-script] Connection limit triggered: " level debug limit rate 3/minute burst 5 packets counter drop
+			ip protocol tcp ct state new limit rate 60/minute burst 3 packets log prefix "[yuki-script] Connection rate-limit triggered: " level debug limit rate 1/minute burst 5 packets counter accept
+			ip protocol tcp add @connlimit0 { ip saddr ct count over 16 } log prefix "[yuki-script] Connection limit triggered: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# Stateful TCP filters.
 		# ========================================
-			tcp flags ! syn ct state new log prefix "[yuki-script] TCP != SYN but state NEW: " level debug limit rate 3/minute burst 5 packets counter drop
-			tcp flags syn ct state ! new log prefix "[yuki-script] TCP SYN but state != NEW: " level debug limit rate 3/minute burst 5 packets counter drop
+			tcp flags ! syn ct state new log prefix "[yuki-script] TCP != SYN but state NEW: " level debug limit rate 1/minute burst 5 packets counter drop
+			tcp flags syn ct state ! new log prefix "[yuki-script] TCP SYN but state != NEW: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# MSS Filter.
 		# ========================================
-			tcp option maxseg size != 536-1460 log prefix "[yuki-script] Invalid MSS value: " level debug limit rate 3/minute burst 5 packets counter drop
+			tcp option maxseg size != 536-1460 log prefix "[yuki-script] Invalid MSS value: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# Drop packets with incorrect TTL values.
 		# ========================================
-			ip ttl != 1-128 log prefix "[yuki-script] Invalid TTL: " level debug limit rate 3/minute burst 5 packets counter drop
+			ip ttl != 1-128 log prefix "[yuki-script] Invalid TTL: " level debug limit rate 1/minute burst 5 packets counter drop
 
 		# Drop fragmented packets.
 		# ========================================
-			ip frag-off & 0x1fff != 0x0 log prefix "[yuki-script] Fragmented packet dropped: " level debug limit rate 3/minute burst 5 packets counter drop
+			ip frag-off & 0x1fff != 0x0 log prefix "[yuki-script] Fragmented packet dropped: " level debug limit rate 1/minute burst 5 packets counter drop
 	}
 }

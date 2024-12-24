@@ -3,7 +3,7 @@
 
 # ============================================
 # Bash stuff for safety and speed.
-set -fhueo pipefail
+set -TEBfhueo pipefail
 
 # Check where's the script located.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -169,6 +169,9 @@ else
     print_error "Cannot find the user ruleset."
     exit 1
 fi
+
+# Drop everything that wasn't allowed explicitly.
+"$nft" add rule ip yuki-script prerouting log prefix \"[yuki-script] Dropped by the generic drop rule: \" level debug limit rate 2/minute counter drop
 
 # Sysctl.conf backup management.
 # Note: the backups are located in /etc/sysctl_backups.

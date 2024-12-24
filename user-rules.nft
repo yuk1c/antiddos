@@ -43,6 +43,3 @@ add rule ip yuki-script prerouting tcp dport 22 counter accept
 # Allow IPsec:
 # add rule ip yuki-script prerouting ah counter accept
 # add rule ip yuki-script prerouting esp counter accept
-
-# Drop everything that wasn't allowed explicitly.
-add rule ip yuki-script prerouting counter drop

@@ -42,10 +42,6 @@ table ip yuki-script {
 		# ========================================
 			ct state invalid,untracked log prefix "[yuki-script] Bad packet state: " level debug limit rate 1/minute counter drop
 
-		# Limit connection establishing rate per each IP address to mitigate attacks like "Socket/Handshake/Slowloris".
-		# ========================================
-			ip protocol tcp ct state new limit rate 3/second log prefix "[yuki-script] Connection rate-limit triggered: " level debug limit rate 1/minute counter drop
-
 		# Stateful TCP filters.
 		# ========================================
 			tcp flags ! syn ct state new log prefix "[yuki-script] TCP != SYN but state NEW: " level debug limit rate 1/minute counter drop

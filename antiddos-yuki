@@ -3,231 +3,39 @@
 
 # ============================================
 # Bash stuff for safety and speed.
-set -TEBfhueo pipefail
+set -TEehuo pipefail
 
-# Check where's the script located.
+# Check where the script is.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Connect the config and functions files.
+# Set the cache directory variable and create it.
+cache_dir="$script_dir/cache"
+mkdir -p "$cache_dir"
+
+# Link the config and functions files.
 source "$script_dir/script.conf"
 source "$script_dir/functions.sh"
 
-# ============================================
-# Call the rootcheck & accidental start prevention functions.
-rootcheck "$@"
-accidental_start_prevention "$@"
+# Start time calculation.
 start_time=$(date +%s%3N)
 
-# Distribution check.
+# Start the installation.
+track_phase "Root check"                rootcheck "$@"
+track_phase "Distro check"              check_distro "$@"
+track_phase "Dependency check"          check_dependencies "$@"
+track_phase "Update check"              check_for_updates "$@"
+track_phase "Ruleset backup"            nftables_backup
+track_phase "Interface detection"       detect_interface
+track_phase "Ruleset applying"          apply_nftables
+track_phase "Sysctl applying"           apply_sysctl
+track_phase "Nftables persist. (async)" enable_nftables_persistence
 
-# Check for the --skip_distro_check argument.
-if [ "${1:-}" != "--skip-distro-check" ]; then
-    # Check the distribution
-    if command -v lsb_release > /dev/null 2>&1; then
-        distro=$(lsb_release -is)
-    elif [ -e /etc/os-release ]; then
-        distro=$(awk -F= '/^ID=/{print tolower($2)}' /etc/os-release)
-    else
-        print_error "Failed to determine the distribution. Make sure lsb-release is installed or /etc/os-release is accessible. If you're sure this is an error, use --skip-distro-check."
-        exit 1
-    fi
+# Stop time calculation.
+end_time=$(date +%s%3N)
+elapsed_time=$((end_time - start_time))
 
-    case "$distro" in
-        "Ubuntu" | "Debian")
-            # The distribution is supported, no output.
-            ;;
-        *)
-            print_error "Your distribution ($distro) is not supported. If you're sure this is a mistake, use --skip-distro-check and report it by opening an issue on GitHub."
-            exit 1
-            ;;
-    esac
-fi
-
-# Check if all dependencies are installed.
-
-dependencies=("nftables" "git")
-missing_dependencies=()
-for dep in "${dependencies[@]}"; do
-    if ! dpkg -s "$dep" &>/dev/null; then
-        missing_dependencies+=("$dep")
-    fi
-done
-
-# If there are missing dependencies, prompt the user to install them.
-if [ "${#missing_dependencies[@]}" -gt 0 ]; then
-    print_warning "The following dependencies are missing: ${missing_dependencies[*]}"
-
-    # Check if user has sudo privileges.
-    if sudo -v >/dev/null 2>&1; then
-        print_default2 "Do you want to install them with sudo? (y/n)"
-
-        read -r install_response
-        case "$install_response" in
-            [yY])
-                # Install missing dependencies.
-                apt install "${missing_dependencies[@]}" -y
-                ;;
-            [nN])
-                print_warning "The script cannot run without them. Exiting..."
-                exit 1
-                ;;
-            *)
-                print_error "Incorrect answer. Please respond with 'y' or 'n'."
-                exit 1
-                ;;
-        esac
-    else
-        print_error "Cannot find sudo. Please install the following dependencies manually:"
-        for dep in "${missing_dependencies[@]}"; do
-            echo "  - $dep"
-        done
-        exit 1
-    fi
-fi
-
-# Parse script arguments.
-if [[ "$#" -gt 0 ]]; then
-    while [[ "$#" -gt 0 ]]; do
-        case $1 in
-            --skip-update-check)
-                SKIP_UPDATE_CHECK=true
-                shift
-                ;;
-            *)
-                print_error "Unknown parameter passed: $1"
-                exit 1
-                ;;
-        esac
-    done
-fi
-
-# If --skip_update_check is not present, check for updates.
-if [ "${SKIP_UPDATE_CHECK:-}" != "true" ]; then
-    # Go to the script's directory
-    cd "$script_dir" || print_error "Cannot cd."
-
-    # Fetch updates with a timeout of 3 seconds.
-    if ! timeout 1.5 git fetch; then
-        print_error "Git fetch timed out or failed. Use the '--skip-update-check' argument."
-        exit 1
-    fi
-
-    # Compare local branch with the remote branch.
-    if [ "$(git rev-parse HEAD)" != "$(git rev-parse @"{u}")" ]; then
-        print_default "Updates are available. Do you wanna install them to continue? (y/n)"
-
-        read -r response
-        case "$response" in
-            [yY])
-                # Attempt to pull updates, handle errors quietly.
-                if ! git pull; then
-                    print_error "Unable to update script. You can skip the update check with the '--skip-update-check' argument if you think this is an mistake."
-                    exit 1
-                fi
-
-                print_success "Script updated. Restarting..."
-                exec "$script_dir/$(basename "$0")" "$@"    # Restart the updated script with the original arguments.
-                exit 0  # Make sure to exit after the exec command.
-                ;;
-
-            [nN])
-                print_default "You chose not to update. This isn't really recommended, so we exit, but there is a --skip-update-check' argument to override this."
-                exit 1
-                ;;
-            *)
-                print_error "Incorrect answer."
-                exit 1
-                ;;
-        esac
-    fi
-fi
-
-
-# ============================================
-
-# Flush all rules.
- "$nft" flush ruleset
-
-if [ -f "$script_dir/default-rules.nft" ]; then
-    "$nft" -o -f "$script_dir/default-rules.nft"
-else
-    print_error "Cannot find the default ruleset."
-    exit 1
-fi
-
-if [ -f "$script_dir/user-rules.nft" ]; then
-    while IFS= read -r line; do
-        # Filtering.
-        if [[ -z "$line" || "$line" =~ ^# ]]; then
-            continue
-        fi
-
-        # Adding the rules.
-        "$nft" "$line"
-    done < "$script_dir/user-rules.nft"
-else
-    print_error "Cannot find the user ruleset."
-    exit 1
-fi
-
-# Drop everything that wasn't allowed explicitly.
-"$nft" add rule ip yuki-script prerouting log prefix \"[yuki-script] Dropped by the generic drop rule: \" level debug limit rate 2/minute counter drop
-
-# Sysctl.conf backup management.
-# Note: the backups are located in /etc/sysctl_backups.
-# After you uninstall the script, they aren't deleted and are still kept there.
-
-# If the backup directory does not exist, create it.
-# If cannot create it - show an error and exit.
-if [ ! -d "$backup_dir" ]; then
-    if ! mkdir -p "$backup_dir"; then
-        print_error "Cannot create backup directory: $backup_dir" >&2
-        exit 1
-    fi
-fi
-
-# If the backup file exists, check if the contents of the sysctl.conf file have changed.
-# If contents are the same, skip creating a new backup.
-if [ -f "$backup_file" ]; then
-    # Compare the current sysctl.conf with the existing backup using cmp
-    if cmp -s "$sysctl_conf" "$backup_file"; then
-        echo "No changes detected in sysctl.conf, skipping backup."
-        exit 0
-    fi
-fi
-
-# Make a backup of the sysctl.conf file.
-# If cannot create it - show an error and exit.
-if ! cp "$sysctl_conf" "$backup_file"; then
-    print_error "Failed to create backup." >&2
-    exit 1
-fi
-
-# Scan for old backup files, and delete them, if needed.
-# If cannot delete them - show an error and exit.
-if [ "$num_backups" -gt "$max_backups" ]; then
-    if ! find "$backup_dir" -maxdepth 1 -type f -printf '%T@ %p\n' | sort -k1,1n | head -n -"$max_backups" | cut -d' ' -f2- | xargs -I {} rm "{}"; then
-        print_error "Failed to remove old backups." >&2
-        exit 1
-    fi
-fi
-
-# Apply the tweaked sysctl.conf file.
-cat "$script_dir/sysctl.conf" > /etc/sysctl.conf &
-
-# Save the current nftables.conf file.
-"$nft" -o list ruleset | tee /etc/nftables.conf > /dev/null &
-
-# Enable and start the nftables service so the rules won't get reset after reboots.
-systemctl enable --now nftables > /dev/null &
-
-# Apply the sysctl.conf tweaks and make them permanent.
-if ! cmp -s "$script_dir/sysctl.conf" "$sysctl_conf"; then
-    cp "$script_dir/sysctl.conf" "$sysctl_conf" &
-    eval "$sc_reload" "$script_dir/sysctl.conf" >/dev/null 2>&1 || print_error "Cannot apply the sysctl.conf tweaks."
-fi
-
-# Time calculation stuff.
-end_time=$(date +%s%3N) && elapsed_time=$((end_time - start_time)) && print_success "The script was installed. Took ≈ ${elapsed_time} milliseconds."
-
+# Finalize.
+print_success "The script has been installed."
+print_phase_stats "$elapsed_time"
+mark_first_run_complete
 tput sgr0 # Reset the terminal color.

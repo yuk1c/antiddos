@@ -1,6 +1,7 @@
 
 *
 
+!.*
 !default-rules.nft
 !antiddos-yuki
 !sysctl.conf

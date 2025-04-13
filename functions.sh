@@ -309,7 +309,7 @@ apply_nftables() {
     local default_hash_file="$cache_dir/.nft-default.hash"
     local user_hash_file="$cache_dir/.nft-user.hash"
 
-    # Check if the ruleset files exist.
+    # Check if ruleset files exist.
     [[ ! -f "$default_file" ]] && print_error "Missing default ruleset: $default_file" && exit 1
     [[ ! -f "$user_file" ]] && print_error "Missing user ruleset: $user_file" && exit 1
 
@@ -320,9 +320,9 @@ apply_nftables() {
     [[ -f "$default_hash_file" ]] && default_hash_cached=$(< "$default_hash_file")
     [[ -f "$user_hash_file" ]] && user_hash_cached=$(< "$user_hash_file")
 
-    # Apply default rules only if changed.
+    # Apply default rules if changed.
     if [[ "$default_hash_now" != "$default_hash_cached" ]]; then
-        # Apply the default ruleset.
+        # Apply default ruleset.
         "$nft" -o -f "$default_file" || {
             print_error "Failed to apply default nftables rules."
             exit 1
@@ -330,9 +330,9 @@ apply_nftables() {
         echo "$default_hash_now" > "$default_hash_file"
     fi
 
-    # Apply user rules only if changed.
+    # Apply user rules if changed.
     if [[ "$user_hash_now" != "$user_hash_cached" ]]; then
-        # Apply the user ruleset.
+        # Apply user ruleset.
         "$nft" -o -f "$user_file" || {
             print_error "Failed to apply user nftables rules."
             exit 1
@@ -340,7 +340,7 @@ apply_nftables() {
         echo "$user_hash_now" > "$user_hash_file"
     fi
 
-    # Save current config.
+    # Save the current config.
     "$nft" -o list ruleset | tee /etc/nftables.conf >/dev/null
 }
 

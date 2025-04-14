@@ -308,25 +308,24 @@ apply_nftables() {
     local user_file="$script_dir/user-rules.nft"
     local default_hash_file="$cache_dir/.nft-default.hash"
     local user_hash_file="$cache_dir/.nft-user.hash"
-    local tmp_rules="/tmp/default-rules-${RANDOM}.nft"
+    local tmp_rules
+    tmp_rules=$(mktemp /tmp/default-rules-XXXXXX.nft)
 
     # Check if default and user ruleset files exist.
     [[ ! -f "$default_file" ]] && print_error "Missing default ruleset: $default_file" && exit 1
     [[ ! -f "$user_file" ]] && print_error "Missing user ruleset: $user_file" && exit 1
+    [[ -z "$interface" ]] && print_error "Interface variable is not set." && exit 1
 
-    local default_hash_now="" user_hash_now="" default_hash_cached="" user_hash_cached=""
-    # Compute the hash of the files and store them in background processes.
-    default_hash_now=$(md5sum "$default_file" | cut -d' ' -f1) &
-    user_hash_now=$(md5sum "$user_file" | cut -d' ' -f1) &
-    # If hash files exist, load their cached values.
-    [[ -f "$default_hash_file" ]] && default_hash_cached=$(< "$default_hash_file") &
-    [[ -f "$user_hash_file" ]] && user_hash_cached=$(< "$user_hash_file") &
-    wait
+    local default_hash_now user_hash_now default_hash_cached user_hash_cached
+    default_hash_now=$(md5sum "$default_file" | cut -d' ' -f1)
+    user_hash_now=$(md5sum "$user_file" | cut -d' ' -f1)
+    [[ -f "$default_hash_file" ]] && default_hash_cached=$(< "$default_hash_file")
+    [[ -f "$user_hash_file" ]] && user_hash_cached=$(< "$user_hash_file")
 
     # Apply default rules if the hash has changed.
     if [[ "$default_hash_now" != "$default_hash_cached" ]]; then
         # Replace __IFACE__ with the actual interface name in default rules.
-        sed "s/__IFACE__/${interface}/g" "$default_file"
+        sed "s/__IFACE__/${interface}/g" "$default_file" > "$tmp_rules"
         if ! "$nft" -o -f "$tmp_rules"; then
             print_error "Failed to apply default nftables rules."
             rm -f "$tmp_rules"
@@ -334,8 +333,8 @@ apply_nftables() {
         fi
         # Update the hash of the default rules and store it.
         echo "$default_hash_now" > "$default_hash_file"
-        rm -f "$tmp_rules"
     fi
+    rm -f "$tmp_rules"
 
     # Apply user rules if the hash has changed.
     if [[ "$user_hash_now" != "$user_hash_cached" ]]; then
@@ -350,7 +349,6 @@ apply_nftables() {
     # Save the current nftables configuration.
     "$nft" -o list ruleset | tee /etc/nftables.conf >/dev/null
 }
-
 
 apply_sysctl() {
     local src="$script_dir/sysctl.conf"

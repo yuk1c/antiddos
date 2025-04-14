@@ -1,45 +1,48 @@
-# User-defined rules.
-# They are applied after all the default rules.
-# Templates:
+table inet yuki {
+	chain user-ruleset {
+		# 🌐 Layer 4 — Transport Layer Rules
 
-##########################
-# Layer4 OSI Model Rules #
-##########################
+		# Allow SSH by default
+		ct state new tcp dport 22 counter accept
 
-# Allow your SSH by default:
-add rule ip yuki-script prerouting tcp dport 22 counter accept
+		# Minecraft server
+		#ct state new tcp dport 25565 counter accept
 
-# Minecraft server:
-# add rule ip yuki-script prerouting tcp dport 25565 counter accept
+		# SSH on port 2222
+		#ct state new tcp dport 2222 counter accept
 
-# SSH on port 2222:
-# add rule ip yuki-script prerouting tcp dport 2222 counter accept
+		# Allow HTTP
+		#ct state new tcp dport 80 counter accept
 
-# Allow HTTP:
-# add rule ip yuki-script prerouting tcp dport 80 counter accept
+		# Allow HTTPS
+		#ct state new tcp dport 443 counter accept
 
-# Allow HTTPS:
-# add rule ip yuki-script prerouting tcp dport 443 counter accept
+		# Allow WireGuard
+		#ct state new udp dport 51820 counter accept
 
-# Allow WireGuard:
-# add rule ip yuki-script prerouting udp dport 51820 counter accept
+		# Allow OpenVPN [TCP]
+		#ct state new tcp dport 1194 counter accept
 
-# Allow OpenVPN [TCP]:
-# add rule ip yuki-script prerouting tcp dport 1194 counter accept
+		# Allow OpenVPN [UDP]
+		#ct state new udp dport 1194 counter accept
 
-# Allow OpenVPN [UDP]:
-# add rule ip yuki-script prerouting udp dport 1194 counter accept
+		# Custom UDP port (12345)
+		#ct state new udp dport 12345 counter accept
 
-##########################
-# Layer3 OSI Model Rules #
-##########################
+		# Custom TCP port (12345)
+		#ct state new tcp dport 12345 counter accept
 
-# Allow IGMP:
-# add rule ip yuki-script prerouting igmp counter accept
+		# 🧱 Layer 3 — Network Layer Rules
+		# ⚠️ These will not work if the protocol filter is active (it is, by default) in the main ruleset.
 
-# Allow GRE:
-# add rule ip yuki-script prerouting gre counter accept
+		# Allow IGMP
+		#ip protocol igmp counter accept
 
-# Allow IPsec:
-# add rule ip yuki-script prerouting ah counter accept
-# add rule ip yuki-script prerouting esp counter accept
+		# Allow GRE
+		#ip protocol gre counter accept
+
+		# Allow IPsec
+		#ip protocol ah counter accept
+		#ip protocol esp counter accept
+	}
+}

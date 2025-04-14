@@ -1,37 +1,50 @@
-## yuki-antiDDoS - simple host AntiDDoS.
+<div align="center">
+  <img src="https://github.com/user-attachments/assets/96b9d177-fe29-41f4-8a6e-7731d5696409"
+       alt="banner"
+       style="width: 7%; height: auto;" />
+    <h1> yuki-antiddos</h1>
+</div>
 
-### Quick Installation
+
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Backend-nftables-red?style=for-the-badge" alt="Backend: nftables"/>
+  <img src="https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge" alt="License: MIT"/>
+  <img src="https://img.shields.io/badge/Protection-L3--L4-critical?style=for-the-badge&logo=linux" alt="Protection Level: L3-L4"/>
+  <img src="https://img.shields.io/badge/Ubuntu-24.04%2B-orange?style=for-the-badge&logo=ubuntu" alt="OS: Ubuntu 24.04+"/>
+</p>
+
+
+## ❔ What this is?
+yuki-antiddos is a simple project aimed at mitigating most of the L3-L4 attacks by using just nftables and kernel tweaks. It's made for servers, desktops (what if you need more security in public networks on your Linux laptop?), and routers (additional configuration needed in this case). It's capable of filtering even the most sophisticated attacks at the same time leaving your legitimate traffic untouched and not impacting the overall performance and CPU load. To know how is this possible, continue reading.
+
+## ⏩ **Optimization**
+Most of ruleset makers forget about optimization; We don't.
+Our custom techniques allow for filtering out attacks with massive PPS rates without causing unnecessary strain on your server’s CPU.
+
+## ⚙️ **Features**
+- 🛡️ Split-chain system
+- ⛔ Default drop policy
+- 📶 Two-stage UDP stateful ratelimiting
+- 🧩 Sysctl-level kernel tuning
+
+## 📦 **Installation**
 ```
 sudo apt update && sudo apt purge ufw firewalld -y && sudo apt install nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
-``` 
-
-This command removes UFW/firewalld completely as the script isn't compatible with them. Make sure you don't rely on them before running it.
-
-### Dependencies
-The mandatory dependencies are <code>nftables</code> (for the rules) and <code>git</code> (so you can download the script, update it, etc.). Nothing else.
-For the monitoring script, you'd need to have Python 3 installed.
-
-### Compatibility
-- Ubuntu 22.04+
-- Debian 11+ [Beta]
-
-Probably compatible with other Debian-based distros.
-Use the newest LTS Ubuntu release for the script to perform at its best.
-Also, you can use the script on your Linux laptop, for example, so you'll care less about being targeted with L3-L4 attacks in public networks.
-
-### Quick Update
-```
-cd ~/antiddos && git pull && sudo ./antiddos-yuki && cd
 ```
 
-### Real-time monitoring
-```
-sudo python3 monitoring.py
-```
+## 🧪 **Compatibility**
 
-### Opening ports
-Add a rule to the beginning of the user-rules.nft file. Here's an example of one to allow TCP to port 25565 (for Minecraft servers):
+| Distribution       | Status                 |
+|--------------------|------------------------|
+| **Ubuntu 24.04+**   | Fully supported and recommended  |
+| **Ubuntu < 24.04**  | Not recommended                  |
+| **Debian 12+**      | Partially supported              |
+| **Other distros**   | Not supported                    |
 
-<code>add rule ip yuki-script prerouting <u>tcp</u> dport <u>25565</u> counter accept</code>
 
-#### There are some pre-defined rules already; just uncomment ones you need and re-apply the script.
+## 📋 **Dependencies**
+- Nftables, for packet filtering
+- Git, to clone the repository
+
+## ⁉️ <a href="https://github.com/yuk1c/antiddos/wiki/FAQ">FAQ</a>

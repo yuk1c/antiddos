@@ -15,7 +15,6 @@ table inet yuki {
 			ip hdrlength != 5 counter drop # IP header is usually only 20 bytes in size, so we filter out packets with any other sizes. Don't use on routers.
 			ip id > 65535 counter drop # If the IP ID is more than 65535, the packet isn't valid and we safely can drop it.
 			ip version != 4 counter drop # Receiving a packet which IP version isn't 4 being on an IPv4 network is strange, right? (you can keep it even if you use IPv6, BTW.)
-			tcp doff != { 8, 10, 11 } counter drop # The only often valid data offset values in TCP are 8, 10, and, sometimes, 11.
 			tcp option maxseg size != 536-8960 log counter drop # MSS Filter (compatible with Jumbo Frames).
 			ip dscp != { cs0, cs1, cs2, cs3, cs4, cs5, cs6, af11, af12, af13, af21, af22, af23, af31, af32, af33, af41, af42, af43 } counter drop # Shouldn't be used on routers! Basically it filters out packets with any incorrect/uncommon DSCP values.
 			ip protocol != { tcp, udp, icmp } counter drop # Allow only known, widely used protocols; drop others.

@@ -3,7 +3,7 @@
 
 # ============================================
 # Bash stuff for safety and speed.
-set -TEehuo pipefail
+set -TEeuo pipefail
 
 # Check where the script is.
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

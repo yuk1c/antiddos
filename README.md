@@ -30,7 +30,7 @@ Our custom techniques allow for filtering out attacks with massive PPS rates wit
 
 ## 📦 **Installation**
 ```
-sudo apt update && sudo apt purge ufw firewalld -y && sudo apt install nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo ./antiddos-yuki && cd ..
+sudo apt update && sudo apt purge ufw firewalld -y && sudo apt install nftables git -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
 ## 🧪 **Compatibility**

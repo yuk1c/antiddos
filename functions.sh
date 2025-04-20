@@ -308,17 +308,13 @@ check_network() {
     local dns_host="1.1.1.1"
     local dns_port=53
 
-    print_info2 "Checking network connectivity..."
-
     # Try ICMP ping.
     if ping -c 1 -W 1 "$test_host" >/dev/null 2>&1; then
-        print_info2 "ICMP ping succeeded."
         return 0
     fi
 
     # Try DNS over TCP.
     if timeout 2 bash -c "echo | nc -w 1 $dns_host $dns_port" >/dev/null 2>&1; then
-        print_info2 "DNS port $dns_port on $dns_host is reachable (TCP)."
         return 0
     fi
 
@@ -327,7 +323,6 @@ check_network() {
 }
 
 smart_flush() {
-    print_info2 "Flushing current nftables ruleset..."
     if ! "$nft" flush ruleset; then
         print_error "Failed to flush nftables ruleset."
         exit 1
@@ -378,10 +373,7 @@ rollback_nftables() {
 }
 
 apply_nftables_safe() {
-    print_info2 "Applying nftables rules safely..."
-
     nftables_backup
-
     local default_file="$script_dir/default-rules.nft"
     local user_file="$script_dir/user-rules.nft"
     local tmp_default
@@ -426,8 +418,6 @@ apply_nftables_safe() {
             print_error "Rollback failed. Manual intervention required."
             exit 1
         }
-    else
-        print_info2 "Network connectivity verified after applying rules."
     fi
 }
 

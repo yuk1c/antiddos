@@ -103,8 +103,11 @@ def systemd_nftables_check():
 # -----------------------------
 # Main
 # -----------------------------
-    def main():
-        print("📍 Current working directory:", os.getcwd())
+# -----------------------------
+# Main
+# -----------------------------
+def main():
+    print("📍 Current working directory:", os.getcwd())
 
     print("\n📂 Files and dirs in current dir:")
     for item in os.listdir("."):
@@ -123,7 +126,6 @@ def systemd_nftables_check():
         full_path = os.path.join(project_root, file)
         print(f"  {file} → {full_path} → {'FOUND ✅' if os.path.exists(full_path) else 'MISSING ❌'}")
 
-
     os.chdir("..")
     print("📦 Starting tests...")
 
@@ -139,7 +141,6 @@ def systemd_nftables_check():
     systemd_nftables_check()
 
     print("🎉 All tests passed!")
-
 
 if __name__ == "__main__":
     main()

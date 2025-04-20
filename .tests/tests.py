@@ -28,10 +28,15 @@ SYN_TEST_PORT = 22
 SYN_RATE_PPS = 4
 SYN_DURATION = 3  # seconds
 
+script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(script_path)
+project_root = os.path.abspath(os.path.join(script_dir, ".."))
+
 # -----------------------------
 # Utils
 # -----------------------------
 def check_exists_and_nonempty(file_path):
+    print(f"📁 Looking for: {file_path}")
     print(f"🔍 Checking {file_path}...")
     if not os.path.isfile(file_path):
         sys.exit(f"❌ {file_path} does not exist")
@@ -98,7 +103,27 @@ def systemd_nftables_check():
 # -----------------------------
 # Main
 # -----------------------------
-def main():
+    def main():
+        print("📍 Current working directory:", os.getcwd())
+
+    print("\n📂 Files and dirs in current dir:")
+    for item in os.listdir("."):
+        print("  └──", item)
+
+    print("\n📂 Files and dirs in script dir:")
+    for item in os.listdir(script_dir):
+        print("  └──", item)
+
+    print("\n📂 Files and dirs in project root:")
+    for item in os.listdir(project_root):
+        print("  └──", item)
+
+    print("\n🔎 Full path of each REQUIRED_FILE:")
+    for file in REQUIRED_FILES:
+        full_path = os.path.join(project_root, file)
+        print(f"  {file} → {full_path} → {'FOUND ✅' if os.path.exists(full_path) else 'MISSING ❌'}")
+
+
     os.chdir("..")
     print("📦 Starting tests...")
 

@@ -1,5 +1,3 @@
-flush ruleset
-
 table inet yuki {
 	chain ingress {
 		# meta nftrace set 1 # For "nft monitor trace" (debugging)
@@ -61,6 +59,5 @@ table inet yuki {
 	}
 
 	chain user-ruleset {
-
 	}
 }

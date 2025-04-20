@@ -1,11 +1,3 @@
-
-*
-
-!.*
-!default-rules.nft
-!antiddos-yuki
-!sysctl.conf
-!script.conf
-!user-rules.nft
-!functions.sh
-!README.md
+# Ignore this:
+/backups
+/cache

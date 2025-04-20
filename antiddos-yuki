@@ -20,15 +20,14 @@ source "$script_dir/functions.sh"
 start_time=$(date +%s%3N)
 
 # Start the installation.
-track_phase "Root check"                rootcheck "$@"
-track_phase "Distro check"              check_distro "$@"
-track_phase "Dependency check"          check_dependencies "$@"
-track_phase "Update check"              check_for_updates "$@"
-track_phase "Ruleset backup"            nftables_backup
-track_phase "Interface detection"       detect_interface
-track_phase "Ruleset applying"          apply_nftables
-track_phase "Sysctl applying"           apply_sysctl
-track_phase "Nftables persist. (async)" enable_nftables_persistence
+track_phase "Root check"                    rootcheck "$@"
+track_phase "Distro check"                  check_distro "$@"
+track_phase "Dependency check"              check_dependencies "$@"
+track_phase "Update check"                  check_for_updates "$@"
+track_phase "Interface detection"           detect_interface
+track_phase "Ruleset management"            apply_nftables_safe || flush_ruleset_handler
+track_phase "Sysctl applying"               apply_sysctl
+track_phase "Nftables persistence"          enable_nftables_persistence
 
 # Stop time calculation.
 end_time=$(date +%s%3N)

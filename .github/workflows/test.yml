@@ -25,5 +25,5 @@ jobs:
             ${{ matrix.image }} bash -c "
               apt update &&
               apt install -y nftables git curl python3 python3-pip python3-scapy &&
-              python3 tests.py
+              python3 .tests/tests.py
             "

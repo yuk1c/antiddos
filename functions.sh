@@ -174,54 +174,40 @@ check_for_updates() {
     fi
 }
 
-
 nftables_backup() {
-    local now_str backup_base target_file latest_file total_backups recent_backups cache_file
+    local now_str backup_base target_file total_backups recent_backups latest_backup
 
     now_str="$(date +%m-%d-%Y-%H%M%S)"
     backup_base="$script_dir/backups/nftables"
     target_file="$backup_base/nftables.conf-$now_str"
-    cache_file="$cache_dir/nftables-backup"
 
-    # Make the backup dir, if it doesn't exist.
     mkdir -p "$backup_base"
 
-    # Use the cached information if it exists.
-    if [[ -f "$cache_file" ]]; then
-        source "$cache_file"
-    else
-        latest_file=$(find "$backup_base" -type f -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)
-        total_backups=$(find "$backup_base" -type f | wc -l)
-        recent_backups=$(find "$backup_base" -type f -cmin -5 | wc -l)
-
-        # Cache the info we've just calculated:
-        echo "latest_file='$latest_file'" > "$cache_file"
-        echo "total_backups=$total_backups" >> "$cache_file"
-        echo "recent_backups=$recent_backups" >> "$cache_file"
-    fi
-
-    # If the last file and the current config are the same, skip.
-    if [[ -n "$latest_file" && -f "$backup_base/$latest_file" && -f /etc/nftables.conf && $(cmp -s /etc/nftables.conf "$backup_base/$latest_file"; echo $?) -eq 0 ]]; then
+    # Validate config before backup.
+    if ! nft -c -f /etc/nftables.conf &>/dev/null; then
+        print_error "Config is invalid. Skipping backup to avoid locking in broken state."
         return
     fi
 
-    # If there're more than 20 backups, delete the oldest one.
+    total_backups=$(find "$backup_base" -type f | wc -l)
+    recent_backups=$(find "$backup_base" -type f -cmin -5 | wc -l)
+
+    if (( recent_backups >= 5 )); then
+        print_warning "Too many recent backups (≥5 in 5 min). Skipping."
+        return
+    fi
+
     if (( total_backups >= 20 )); then
+        print_info2 "Cleaning up old backups..."
         find "$backup_base" -type f -printf "%T@ %p\n" | sort -n | head -n $((total_backups - 19)) | cut -d' ' -f2- | xargs rm -f
     fi
 
-    # Don't make a backup if there were 5 or more backups created in the past 5 minutes.
-    if (( recent_backups >= 5 )); then
+    latest_backup=$(find "$backup_base" -type f -printf "%T@ %p\n" | sort -nr | head -n 1 | cut -d' ' -f2-)
+    if [[ -n "$latest_backup" && -f "$latest_backup" && $(cmp -s /etc/nftables.conf "$latest_backup"; echo $?) -eq 0 ]]; then
         return
     fi
 
-    # Copy our config to the new file.
     cp /etc/nftables.conf "$target_file"
-
-    # Update the cache.
-    echo "latest_file='$target_file'" > "$cache_file"
-    echo "total_backups=$((total_backups + 1))" >> "$cache_file"
-    echo "recent_backups=1" >> "$cache_file"
 }
 
 check_distro() {
@@ -303,35 +289,146 @@ check_dependencies() {
     touch "$cache_file"
 }
 
-apply_nftables() {
+check_network() {
+    local test_host="1.1.1.1"
+    local dns_host="1.1.1.1"
+    local dns_port=53
+
+    print_info2 "Checking network connectivity..."
+
+    # Try ICMP ping.
+    if ping -c 1 -W 1 "$test_host" >/dev/null 2>&1; then
+        print_info2 "ICMP ping succeeded."
+        return 0
+    fi
+
+    # Try DNS over TCP.
+    if timeout 2 bash -c "echo | nc -w 1 $dns_host $dns_port" >/dev/null 2>&1; then
+        print_info2 "DNS port $dns_port on $dns_host is reachable (TCP)."
+        return 0
+    fi
+
+    print_warning "Network check failed. No connectivity detected."
+    return 1
+}
+
+smart_flush() {
+    print_info2 "Flushing current nftables ruleset..."
+    if ! "$nft" flush ruleset; then
+        print_error "Failed to flush nftables ruleset."
+        exit 1
+    fi
+
+    if ! check_flush; then
+        print_error "Ruleset not emptied after flush. Manual intervention required."
+        exit 1
+    fi
+}
+
+rollback_nftables() {
+    local backup_dir="$script_dir/backups/nftables"
+    local latest_file
+
+    # Check if backup directory exists.
+    if [[ ! -d "$backup_dir" ]]; then
+        print_error "Backup directory not found: $backup_dir"
+        return 1
+    fi
+
+    # Find the latest backup file by timestamp.
+    latest_file=$(ls -t "$backup_dir" | head -n 1)
+
+    if [[ -z "$latest_file" || ! -f "$backup_dir/$latest_file" ]]; then
+        print_error "No valid backup file found for rollback."
+        return 1
+    fi
+
+    print_warning "Restoring previous nftables config from backup: $backup_dir/$latest_file"
+
+    # Copy the latest backup to /etc/nftables.conf.
+    if ! cp "$backup_dir/$latest_file" /etc/nftables.conf; then
+        print_error "Failed to restore nftables.conf from backup."
+        return 1
+    fi
+
+    smart_flush
+
+    # Apply the restored nftables rules.
+    if ! "$nft" -o -f /etc/nftables.conf >/dev/null; then
+        print_error "Failed to apply restored nftables rules."
+        return 1
+    fi
+
+    print_info2 "Rollback completed successfully."
+    return 0
+}
+
+apply_nftables_safe() {
+    print_info2 "Applying nftables rules safely..."
+
+    nftables_backup
+
     local default_file="$script_dir/default-rules.nft"
     local user_file="$script_dir/user-rules.nft"
     local tmp_default
 
-    [[ ! -f "$default_file" ]] && print_error "Missing default ruleset: $default_file" && exit 1
-    [[ ! -f "$user_file" ]] && print_error "Missing user ruleset: $user_file" && exit 1
+    [[ ! -f "$default_file" ]] && print_error "Missing default ruleset: $default_file." && exit 1
+    [[ ! -f "$user_file" ]] && print_error "Missing user ruleset: $user_file." && exit 1
     [[ -z "$interface" ]] && print_error "Interface variable is not set." && exit 1
 
-    # Prepare default rules (replace interface).
+    smart_flush
+
     tmp_default=$(mktemp /tmp/default-rules-XXXXXX.nft)
     sed "s/__IFACE__/${interface}/g" "$default_file" > "$tmp_default"
 
-    # Apply default rules.
-    if ! "$nft" -o -f "$tmp_default"; then
+    if ! "$nft" -f "$tmp_default"; then
         print_error "Failed to apply default nftables rules."
         rm -f "$tmp_default"
         exit 1
     fi
     rm -f "$tmp_default"
 
-    # Apply user rules.
-    if ! "$nft" -o -f "$user_file"; then
+    if ! "$nft" -f "$user_file"; then
         print_error "Failed to apply user nftables rules."
         exit 1
     fi
 
-    # Save the current nftables configuration.
-    "$nft" -o list ruleset | tee /etc/nftables.conf >/dev/null
+    if ! "$nft" list ruleset | tee /etc/nftables.conf >/dev/null; then
+        print_error "Failed to save nftables configuration to /etc/nftables.conf."
+        return 1
+    fi
+
+    if ! "$nft" list ruleset | grep -q "chain user-ruleset"; then
+        print_error "User-ruleset chain is missing in nftables ruleset."
+        print_info2 "Rolling back the nftables configuration..."
+        rollback_nftables || exit 1
+        print_error "Something went wrong, we’ve rolled back your changes to ensure you don’t lose access to your server.\nYou can try updating your kernel or removing possibly conflicting services."
+        exit 1
+    fi
+
+    if ! check_network; then
+        print_warning "Connectivity lost after applying rules. Attempting rollback..."
+        rollback_nftables || {
+            print_error "Rollback failed. Manual intervention required."
+            exit 1
+        }
+    else
+        print_info2 "Network connectivity verified after applying rules."
+    fi
+}
+
+check_flush() {
+    # Check that the ruleset is actually empty after flush.
+    if [[ -n "$("$nft" list ruleset)" ]]; then
+        print_error "Failed to flush nftables rules. Ruleset is not empty."
+        return 1
+    fi
+    return 0
+}
+
+flush_ruleset_handler() {
+    print_error "Unable to clear nftables ruleset. Flushing did not work properly.\nYou can try updating your kernel or removing possibly conflicting services."
+    exit 1
 }
 
 apply_sysctl() {
@@ -353,7 +450,7 @@ apply_sysctl() {
 }
 
 enable_nftables_persistence() {
-    systemctl enable --now nftables > /dev/null &
+    systemctl enable --now nftables > /dev/null
 }
 
 track_phase() {
@@ -375,6 +472,6 @@ print_phase_stats() {
         local name="${phase_names[$i]}"
         local dur="${phase_durations[$i]}"
         local pct=$(awk "BEGIN { printf \"%.1f\", (${dur}/${total})*100 }")
-        printf "  • %-25s %5d ms (%5s%%)\n" "$name" "$dur" "$pct"
+        printf "  • %-30s %5d ms (%5s%%)\n" "$name" "$dur" "$pct"
     done
 }

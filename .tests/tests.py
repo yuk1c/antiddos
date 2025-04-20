@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+os.environ["TERM"] = "xterm"
 import subprocess
 import sys
 import time
@@ -22,11 +23,6 @@ REQUIRED_FILES = [
 
 NFTABLES_CONF = "/etc/nftables.conf"
 SYSCTL_CONF = "/etc/sysctl.d/99-yuki.conf"
-
-SYN_TEST_IP = "127.0.0.1"
-SYN_TEST_PORT = 22
-SYN_RATE_PPS = 4
-SYN_DURATION = 3  # seconds
 
 script_path = os.path.abspath(__file__)
 script_dir = os.path.dirname(script_path)
@@ -72,7 +68,9 @@ def check_network():
 
 def run_antiddos():
     print("🚀 Running antiddos-yuki...")
-    subprocess.run(["bash", "antiddos-yuki"], check=True)
+    env = os.environ.copy()
+    env["TERM"] = "xterm"
+    subprocess.run(["bash", "antiddos-yuki"], check=True, env=env)
 
 
 def validate_ruleset():

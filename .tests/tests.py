@@ -28,10 +28,15 @@ SYN_TEST_PORT = 22
 SYN_RATE_PPS = 4
 SYN_DURATION = 3  # seconds
 
+script_path = os.path.abspath(__file__)
+script_dir = os.path.dirname(script_path)
+project_root = os.path.abspath(os.path.join(script_dir, ".."))
+
 # -----------------------------
 # Utils
 # -----------------------------
 def check_exists_and_nonempty(file_path):
+    print(f"📁 Looking for: {file_path}")
     print(f"🔍 Checking {file_path}...")
     if not os.path.isfile(file_path):
         sys.exit(f"❌ {file_path} does not exist")
@@ -67,12 +72,12 @@ def check_network():
 
 def run_antiddos():
     print("🚀 Running antiddos-yuki...")
-    subprocess.run(["sudo", "bash", "antiddos-yuki"], check=True)
+    subprocess.run(["bash", "antiddos-yuki"], check=True)
 
 
 def validate_ruleset():
     print("🧾 Checking ruleset...")
-    output = subprocess.check_output(["sudo", "nft", "list", "ruleset"], text=True)
+    output = subprocess.check_output(["nft", "list", "ruleset"], text=True)
     required_patterns = [
         "goto user-ruleset",
         "chain user-ruleset",
@@ -88,7 +93,7 @@ def validate_ruleset():
 
 def systemd_nftables_check():
     print("🔧 Verifying systemd starts nftables without errors...")
-    result = subprocess.run(["sudo", "systemctl", "start", "nftables"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(["systemctl", "start", "nftables"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode != 0:
         print(result.stderr.decode())
         sys.exit("❌ systemctl failed to start nftables")
@@ -99,7 +104,25 @@ def systemd_nftables_check():
 # Main
 # -----------------------------
 def main():
-    os.chdir("..")
+    print("📍 Current working directory:", os.getcwd())
+
+    print("\n📂 Files and dirs in current dir:")
+    for item in os.listdir("."):
+        print("  └──", item)
+
+    print("\n📂 Files and dirs in script dir:")
+    for item in os.listdir(script_dir):
+        print("  └──", item)
+
+    print("\n📂 Files and dirs in project root:")
+    for item in os.listdir(project_root):
+        print("  └──", item)
+
+    print("\n🔎 Full path of each REQUIRED_FILE:")
+    for file in REQUIRED_FILES:
+        full_path = os.path.join(project_root, file)
+        print(f"  {file} → {full_path} → {'FOUND ✅' if os.path.exists(full_path) else 'MISSING ❌'}")
+
     print("📦 Starting tests...")
 
     for file in REQUIRED_FILES:
@@ -114,7 +137,6 @@ def main():
     systemd_nftables_check()
 
     print("🎉 All tests passed!")
-
 
 if __name__ == "__main__":
     main()

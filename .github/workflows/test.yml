@@ -9,9 +9,6 @@ jobs:
       matrix:
         image:
           - ubuntu:24.04
-          - ubuntu:23.04
-          - debian:12
-          - debian:11
 
     steps:
       - name: Checkout code
@@ -28,5 +25,5 @@ jobs:
             ${{ matrix.image }} bash -c "
               apt update &&
               apt install -y nftables git curl python3 python3-pip python3-scapy &&
-              python3 tests.py
+              python3 .tests/tests.py
             "

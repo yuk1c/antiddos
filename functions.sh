@@ -211,27 +211,41 @@ nftables_backup() {
 }
 
 check_distro() {
-    local cache_file="$cache_dir/distro"
+    local id version pretty_name kernel_version
 
-    if [[ -f "$cache_file" ]]; then
-        distro=$(< "$cache_file")
+    if command -v lsb_release &>/dev/null; then
+        id=$(lsb_release -is | tr '[:upper:]' '[:lower:]')
+        version=$(lsb_release -rs)
+        pretty_name=$(lsb_release -ds)
+    elif [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        id=${ID,,}
+        version=${VERSION_ID}
+        pretty_name=${PRETTY_NAME}
     else
-        if command -v lsb_release > /dev/null 2>&1; then
-            distro=$(lsb_release -is)
-        elif [ -e /etc/os-release ]; then
-            distro=$(awk -F= '/^ID=/{print tolower($2)}' /etc/os-release)
-        else
-            print_error "Failed to determine the distribution. Use --skip-distro-check to override."
-            exit 1
-        fi
-        echo "$distro" > "$cache_file"
+        print_error "Cannot determine the distribution. Aborting."
+        exit 1
     fi
 
-    case "$distro" in
-        "Ubuntu" | "Debian")
+    kernel_version=$(uname -sr)
+
+    print_info2 "🖥️ Running on $pretty_name, kernel $kernel_version"
+
+    case "$id" in
+        ubuntu)
+            if [[ $(echo "$version < 24.04" | bc) -eq 1 ]]; then
+                print_warning "Ubuntu version $version is older than 24.04."
+                read -rp "▶️ It is strongly recommended to upgrade. Continue anyway? [y/N]: " confirm
+                [[ "$confirm" =~ ^[Yy]$ ]] || exit 1
+            fi
+            ;;
+        debian)
+            print_warning "Debian is not officially supported by this script."
+            read -rp "▶️ Continue anyway? [y/N]: " confirm
+            [[ "$confirm" =~ ^[Yy]$ ]] || exit 1
             ;;
         *)
-            print_error "Unsupported distro: $distro. Use --skip-distro-check to override."
+            echo "❌ Unsupported distro: $id. Aborting."
             exit 1
             ;;
     esac

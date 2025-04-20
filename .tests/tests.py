@@ -72,12 +72,12 @@ def check_network():
 
 def run_antiddos():
     print("🚀 Running antiddos-yuki...")
-    subprocess.run(["sudo", "bash", "antiddos-yuki"], check=True)
+    subprocess.run(["bash", "antiddos-yuki"], check=True)
 
 
 def validate_ruleset():
     print("🧾 Checking ruleset...")
-    output = subprocess.check_output(["sudo", "nft", "list", "ruleset"], text=True)
+    output = subprocess.check_output(["nft", "list", "ruleset"], text=True)
     required_patterns = [
         "goto user-ruleset",
         "chain user-ruleset",
@@ -93,7 +93,7 @@ def validate_ruleset():
 
 def systemd_nftables_check():
     print("🔧 Verifying systemd starts nftables without errors...")
-    result = subprocess.run(["sudo", "systemctl", "start", "nftables"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    result = subprocess.run(["systemctl", "start", "nftables"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if result.returncode != 0:
         print(result.stderr.decode())
         sys.exit("❌ systemctl failed to start nftables")

@@ -27,7 +27,7 @@ Our custom techniques allow for filtering out attacks with massive PPS rates wit
 
 ## 📦 **Installation**
 ```
-sudo apt update && sudo apt purge ufw firewalld -y && sudo apt install nftables git bc iproute2 -y && git clone https://github.com/yuk1c/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
+sudo apt update && sudo apt purge ufw firewalld -y && sudo apt install nftables git bc iproute2 -y && git clone https://github.com/mintyYuki/antiddos && cd antiddos && sudo bash antiddos-yuki && cd ..
 ```
 
 ## 🧪 **Compatibility**
@@ -43,4 +43,4 @@ sudo apt update && sudo apt purge ufw firewalld -y && sudo apt install nftables 
 - Nftables, for packet filtering
 - Git, to clone the repository
 
-## ⁉️ <a href="https://github.com/yuk1c/antiddos/wiki/FAQ">FAQ</a>
+## ⁉️ <a href="https://github.com/mintyYuki/antiddos/wiki/FAQ">FAQ</a>

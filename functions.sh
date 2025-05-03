@@ -1,60 +1,49 @@
-check_argument() {
-    if [ -z "$1" ]; then
-        echo "Error: Missing argument." >&2
-        return 1
-    fi
-}
-
 print_info() {
-    check_argument "$1" || return 1
     # For printing gradient messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
-		echo -e "$1" | lolcat
+		echo -e "ⓘ $1" | lolcat
         tput sgr0
 	else
-		echo -e "${BGray}$1"
+		echo -e "${BGray}ⓘ $1"
         tput sgr0
 	fi
 }
 
 print_info2() {
     # For printing gray messages.
-    echo -e "${BGray}$1"
+    echo -e "${BGray}ⓘ $1"
     tput sgr0
 }
 
 print_success() {
-    check_argument "$1" || return 1
     # For printing gradient success messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
-		echo -e "✓ Success. $1" | lolcat
+		echo -e "✓ $1" | lolcat
         tput sgr0
 	else
-		echo -e "${BGray}✓ Success. $1"
+		echo -e "${BGray}✓ $1"
         tput sgr0
 	fi
 }
 
 print_warning() {
-    check_argument "$1" || return 1
     # For printing gradient warning messages with auto-fallback.
     if command -v lolcat &>/dev/null; then
-        echo -e "⚠︎ Warning: $1" | lolcat >&2
+        echo -e "⚠︎ $1" | lolcat >&2
         tput sgr0
     else
-        echo -e "${BGray}⚠︎ Warning: $1" >&2
+        echo -e "${BGray}⚠︎ $1" >&2
         tput sgr0
     fi
 }
 
 print_error() {
-    check_argument "$1" || return 1
     # For printing gradient error messages with auto-fallback.
 	if command -v lolcat &>/dev/null; then
-		echo -e "✗ Error. $1" | lolcat >&2
+		echo -e "✗ $1" | lolcat >&2
         tput sgr0
 	else
-		echo -e "${BRed}✗ Fail. $1" >&2
+		echo -e "${BRed}✗ $1" >&2
         tput sgr0
 	fi
 }
@@ -68,13 +57,13 @@ rootcheck() {
         fi
 
         if command -v sudo &> /dev/null; then
-            print_warning "This script must be run as root; Using 'sudo' for automatic elevation."
+            print_info2 "This script must be run as root; Using 'sudo' for automatic elevation."
             tput sgr0
             sudo -E bash "$0" "$@"
             exit $?
 
         elif command -v su &> /dev/null; then
-            print_warning "This script must be run as root; Using 'su' for automatic elevation."
+            print_info2 "This script must be run as root; Using 'su' for automatic elevation."
             tput sgr0
             script_path="$(readlink -f "$0")"
             su -c "$script_path" -- "${@}"
@@ -185,7 +174,6 @@ nftables_backup() {
 
     # Validate config before backup.
     if ! nft -c -f /etc/nftables.conf &>/dev/null; then
-        print_error "Config is invalid. Skipping backup to avoid locking in broken state."
         return
     fi
 
@@ -229,7 +217,7 @@ check_distro() {
 
     kernel_version=$(uname -sr)
 
-    print_info2 "🖥️ Running on $pretty_name, kernel $kernel_version"
+    print_info2 "Running on $pretty_name, kernel $kernel_version"
 
     case "$id" in
         ubuntu)
@@ -318,7 +306,6 @@ check_network() {
         return 0
     fi
 
-    print_warning "Network check failed. No connectivity detected."
     return 1
 }
 
@@ -352,8 +339,6 @@ rollback_nftables() {
         return 1
     fi
 
-    print_warning "Restoring previous nftables config from backup: $backup_dir/$latest_file"
-
     # Copy the latest backup to /etc/nftables.conf.
     if ! cp "$backup_dir/$latest_file" /etc/nftables.conf; then
         print_error "Failed to restore nftables.conf from backup."
@@ -374,41 +359,69 @@ rollback_nftables() {
 
 apply_nftables_safe() {
     nftables_backup
-    local default_file="$script_dir/default-rules.nft"
-    local user_file="$script_dir/user-rules.nft"
-    local tmp_default
+    local default_file="$script_dir/ruleset/10-main.nft"
+    local user_file="$script_dir/ruleset/20-user.nft"
+    local deploy_dir="/etc/yukiscript"
+    local tmp_default="$deploy_dir/10-main.nft.unready"
+    local tmp_user="$deploy_dir/20-user.nft.unready"
+    local combined_file="/tmp/nft-combined-$$.nft"
 
     [[ ! -f "$default_file" ]] && print_error "Missing default ruleset: $default_file." && exit 1
     [[ ! -f "$user_file" ]] && print_error "Missing user ruleset: $user_file." && exit 1
     [[ -z "$interface" ]] && print_error "Interface variable is not set." && exit 1
 
+    mkdir -p "$deploy_dir"
+
+    # Get the SSH port.
+    local ssh_port=22
+    if [[ -f /etc/ssh/sshd_config ]]; then
+        ssh_port=$(awk '/^\s*Port\s+[0-9]+/ { print $2 }' /etc/ssh/sshd_config | head -n1)
+        ssh_port=${ssh_port:-22}
+    fi
+    ssh_port=${ssh_port:-22}
+
+    sed "s/__IFACE__/${interface}/g" "$default_file" > "$tmp_default"
+    sed "s/__SSHPORT__/${ssh_port}/g" "$user_file" > "$tmp_user"
+
+    cat > "$combined_file" <<EOF
+
+table inet yuki {
+    include "$deploy_dir/*.nft.unready"
+}
+EOF
+
+    if ! "$nft" -c -f "$combined_file"; then
+        print_error "Syntax check failed for combined nftables rules (from .unready files)."
+        # For debugging.
+        # echo "$combined_file"
+        rm -f "$tmp_default" "$tmp_user" "$combined_file"
+        exit 1
+    fi
+
     smart_flush
 
-    tmp_default=$(mktemp /tmp/default-rules-XXXXXX.nft)
-    sed "s/__IFACE__/${interface}/g" "$default_file" > "$tmp_default"
-
-    if ! "$nft" -f "$tmp_default"; then
-        print_error "Failed to apply default nftables rules."
-        rm -f "$tmp_default"
-        exit 1
-    fi
-    rm -f "$tmp_default"
-
-    if ! "$nft" -f "$user_file"; then
-        print_error "Failed to apply user nftables rules."
+    if ! "$nft" -f "$combined_file"; then
+        print_error "Failed to apply combined nftables ruleset."
+        rollback_nftables
+        rm -f "$tmp_default" "$tmp_user" "$combined_file"
         exit 1
     fi
 
-    if ! "$nft" list ruleset | tee /etc/nftables.conf >/dev/null; then
-        print_error "Failed to save nftables configuration to /etc/nftables.conf."
-        return 1
-    fi
+    mv -f "$tmp_default" "${tmp_default%.unready}"
+    mv -f "$tmp_user" "${tmp_user%.unready}"
+
+    echo "include \"/etc/$deploy_dir/*.nft\"" > /etc/nftables.conf
+
+    cat > /etc/nftables.conf <<EOF
+
+table inet yuki {
+    include "$deploy_dir/*.nft"
+}
+EOF
 
     if ! "$nft" list ruleset | grep -q "chain user-ruleset"; then
         print_error "User-ruleset chain is missing in nftables ruleset."
-        print_info2 "Rolling back the nftables configuration..."
-        rollback_nftables || exit 1
-        print_error "Something went wrong, we’ve rolled back your changes to ensure you don’t lose access to your server.\nYou can try updating your kernel or removing possibly conflicting services."
+        rollback_nftables
         exit 1
     fi
 
@@ -419,6 +432,8 @@ apply_nftables_safe() {
             exit 1
         }
     fi
+
+    rm -f "$combined_file"
 }
 
 check_flush() {

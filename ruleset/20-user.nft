@@ -1,9 +1,10 @@
-table inet yuki {
 	chain user-ruleset {
 		# 🌐 Layer 4 — Transport Layer Rules
 
 		# Allow SSH by default
-		ct state new tcp dport 22 counter accept
+		# Looks up for your SSH port and sets it automatically based on your SSH config.
+		# If can't find one, then fall back to 22.
+		ct state new tcp dport __SSHPORT__ counter accept
 
 		# Minecraft server
 		#ct state new tcp dport 25565 counter accept
@@ -45,4 +46,3 @@ table inet yuki {
 		#ip protocol ah counter accept
 		#ip protocol esp counter accept
 	}
-}

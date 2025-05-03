@@ -27,8 +27,8 @@
 			type filter hook prerouting priority -150; policy drop; # Prerouting hook with the mangle priority for higher-level packet filtering stuff.
 			iif "lo" counter accept # Don't filter the loopback interface. (for performance reasons)
 			counter # Count how many packets arrive here.
-			#fib saddr . iif oif eq 0 counter drop # Strict RP-filter.
-			#fib saddr type != { unicast, local, multicast, broadcast } counter drop # If the packet's source IP address type ain't listed here then it gets dropped.
+			fib saddr . iif oif eq 0 counter drop # Strict RP-filter.
+			fib saddr type != { unicast, local, multicast, broadcast } counter drop # If the packet's source IP address type ain't listed here then it gets dropped.
 			ct state vmap { invalid : drop, established : accept, related : accept } # Allow only legitimate stuff.
 			counter # Count how many packets pass through the previous three rules.
 

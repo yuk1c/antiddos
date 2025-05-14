@@ -383,17 +383,19 @@ apply_nftables_safe() {
     sed "s/__IFACE__/${interface}/g" "$default_file" > "$tmp_default"
     sed "s/__SSHPORT__/${ssh_port}/g" "$user_file" > "$tmp_user"
 
-    cat > "$combined_file" <<EOF
-
+cat > "$combined_file" <<EOF
 table inet yuki {
-    include "$deploy_dir/*.nft.unready"
-}
 EOF
+
+    cat "$tmp_default" >> "$combined_file"
+    cat "$tmp_user" >> "$combined_file"
+
+    echo "}" >> "$combined_file"
 
     if ! "$nft" -c -f "$combined_file"; then
         print_error "Syntax check failed for combined nftables rules (from .unready files)."
-        # For debugging.
-        # echo "$combined_file"
+        # For debugging:
+        # cat "$combined_file"
         rm -f "$tmp_default" "$tmp_user" "$combined_file"
         exit 1
     fi

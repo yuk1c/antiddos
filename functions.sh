@@ -396,8 +396,8 @@ EOF
     if ! "$nft" -c -f "$combined_file"; then
         print_error "Syntax check failed for combined nftables rules (from .unready files)."
         # For debugging:
-         cat "$combined_file"
-        #rm -f "$tmp_default" "$tmp_user" "$combined_file"
+        #cat "$combined_file"
+        rm -f "$tmp_default" "$tmp_user" "$combined_file"
         exit 1
     fi
 

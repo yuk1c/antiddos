@@ -43,4 +43,12 @@ sudo apt update && sudo apt purge ufw firewalld -y && sudo apt install nftables 
 - Nftables, for packet filtering
 - Git, to clone the repository
 
+## ⚠️ **Currently known problems/bugs**
+- Rules don't persist across reboots (Caused by an nftables service error).
+#### (I'm working on this problem; Would either need to make a custom service and use it or just make a workaround for the nftables service. This issue is complicated so I cannot solve it quickly + it's not that critical)
+- Overall stability (There were many changes in the past and at the same time the script didn't get tested very well, so there may be weird bugs)
+- Safety (Also, automatic rollback is a bit incomplete and won't roll the rules back if your SSH stops working, which sometimes happens due to unknown reasons. I will implement automatic roll-back with a timer soon, remove ruleset auto-saving probably or make it smarter, and make the automatic rollback better overall)
+#### (Please don't forget to make backups, it's always a good practice. If SSH is your only method to access your server and it's important for you + you don't have backups -> don't even think about installing the script yet, please.)
+- iptables-nft compatibility
+
 ## ⁉️ <a href="https://github.com/mintyYuki/antiddos/wiki/FAQ">FAQ</a>
